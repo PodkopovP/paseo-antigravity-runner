@@ -63,6 +63,12 @@ RUN echo '#!/bin/bash\n\
   fi\n\
   if [ -n "$GITHUB_TOKEN" ]; then\n\
   gh auth setup-git\n\
+  echo "Downloading AGY CLI engine..."\n\
+  mkdir -p /root/.local/bin\n\
+  gh release download v1.0.13 -R google-antigravity/antigravity-cli -p "agy_cli_linux_x64.tar.gz" -O /tmp/agy.tar.gz\n\
+  tar -xzf /tmp/agy.tar.gz -C /root/.local/bin\n\
+  chmod +x /root/.local/bin/agy\n\
+  export AGY_BIN=/root/.local/bin/agy\n\
   fi\n\
   echo "Installing AGY CLI and setting up bridge..."\n\
   npx --yes @nghichcode/paseo_agy\n\

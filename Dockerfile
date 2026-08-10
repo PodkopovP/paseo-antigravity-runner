@@ -41,6 +41,6 @@ if [ -n "$AGY_OAUTH_TOKEN_B64" ]; then\n\
   chmod 600 /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
   echo "Injected base64 OAuth token for Antigravity CLI."\n\
 fi\n\
-exec paseo start' > /entrypoint.sh && chmod +x /entrypoint.sh
+exec paseo start --foreground' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]

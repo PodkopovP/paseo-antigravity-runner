@@ -9,6 +9,16 @@ RUN apt-get update && apt-get install -y \
     unzip \
     git \
     build-essential \
+    gpg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install GitHub CLI (gh)
+RUN mkdir -p -m 755 /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install gh -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Bun (required by the paseo_agy bridge)
@@ -40,6 +50,12 @@ if [ -n "$AGY_OAUTH_TOKEN_B64" ]; then\n\
   echo "$AGY_OAUTH_TOKEN_B64" | base64 -d > /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
   chmod 600 /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
   echo "Injected base64 OAuth token for Antigravity CLI."\n\
+fi\n\
+if [ -n "$GIT_USER_NAME" ]; then\n\
+  git config --global user.name "$GIT_USER_NAME"\n\
+fi\n\
+if [ -n "$GIT_USER_EMAIL" ]; then\n\
+  git config --global user.email "$GIT_USER_EMAIL"\n\
 fi\n\
 exec paseo start --foreground' > /entrypoint.sh && chmod +x /entrypoint.sh
 

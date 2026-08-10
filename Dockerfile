@@ -64,6 +64,9 @@ fi\n\
 if [ -n "$GIT_USER_EMAIL" ]; then\n\
   git config --global user.email "$GIT_USER_EMAIL"\n\
 fi\n\
+if [ -n "$GITHUB_TOKEN" ]; then\n\
+  gh auth setup-git\n\
+fi\n\
 rm -f /root/.paseo/paseo.pid /root/.paseo/daemon.sock\n\
 exec paseo start --foreground' > /entrypoint.sh && chmod +x /entrypoint.sh
 

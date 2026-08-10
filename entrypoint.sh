@@ -21,11 +21,18 @@ if [ -n "${AGY_OAUTH_TOKEN_B64:-}" ]; then
 fi
 
 # --- Optional MCP config ------------------------------------
+# MCP_CONFIG_B64 is the single source of truth: when unset, remove any
+# persisted config too — every warm agy harness spawns ALL configured MCP
+# servers as long-lived children, and a stale file on the persistent volume
+# would silently resurrect them (~100-400MB RAM each).
 
 if [ -n "${MCP_CONFIG_B64:-}" ]; then
   mkdir -p /root/.gemini/config
   printf '%s' "$MCP_CONFIG_B64" | base64 -d > /root/.gemini/config/mcp_config.json
   echo "Injected MCP configuration."
+elif [ -f /root/.gemini/config/mcp_config.json ]; then
+  rm -f /root/.gemini/config/mcp_config.json
+  echo "Removed stale MCP configuration (MCP_CONFIG_B64 not set)."
 fi
 
 # --- Git / GitHub -------------------------------------------

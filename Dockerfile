@@ -57,13 +57,18 @@ RUN pip3 install --no-cache-dir --upgrade pip \
     "git+https://github.com/jameslunardi/agy-agent-acp@8ff8abbf55434caf93f44ffc374e0ec6bbc1ca55" \
   && agy-agent-acp --help >/dev/null
 
-# Patch: the adapter defaults new sessions to read-only unless the ACP client
-# passes allowWriteTools — an adapter-specific extension Paseo never sends —
-# which hard-blocks run_command (classified as a write tool). Default sessions
-# to writable; permission modes still gate each individual action.
-RUN AGY_SERVER=/usr/local/lib/python3.10/dist-packages/agy_agent_acp/server.py \
-  && grep -c "allow_write = False" "$AGY_SERVER" | grep -qx 1 \
-  && sed -i 's/allow_write = False/allow_write = True/' "$AGY_SERVER"
+# Apply local patches to the pinned adapter — write-tools defaults (Paseo
+# never sends the adapter-specific allowWriteTools extension, and restored
+# sessions reverted to read-only after restarts) and transcript persistence
+# (upstream stores/replays chat history but never records it). The script
+# fails the build if upstream code drifts under the pin.
+COPY patch-agy-adapter.py /tmp/patch-agy-adapter.py
+RUN python3 /tmp/patch-agy-adapter.py \
+  && python3 -m py_compile \
+    /usr/local/lib/python3.10/dist-packages/agy_agent_acp/server.py \
+    /usr/local/lib/python3.10/dist-packages/agy_agent_acp/session_store.py \
+    /usr/local/lib/python3.10/dist-packages/agy_agent_acp/adapter.py \
+  && rm /tmp/patch-agy-adapter.py
 
 # --- Gemini CLI (optional fast lane) --------------------------------------------
 # Persistent ACP agent, but since 2026-06-18 it only serves paid API keys /

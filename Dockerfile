@@ -47,9 +47,14 @@ ENV PATH="/root/.local/bin:${PATH}"
 
 # --- Antigravity ACP adapter (agy-agent-acp) -----------------------------------
 # Pinned to a known-good commit; bump deliberately after testing.
+# Ubuntu 22.04's pip (22.0.2) is too old for this package's PEP 621/639
+# metadata — it silently builds "UNKNOWN-0.0.0" with no console script.
+# Upgrade pip first.
 
-RUN pip3 install --no-cache-dir \
-  "git+https://github.com/jameslunardi/agy-agent-acp@8ff8abbf55434caf93f44ffc374e0ec6bbc1ca55"
+RUN pip3 install --no-cache-dir --upgrade pip \
+  && pip3 install --no-cache-dir \
+    "git+https://github.com/jameslunardi/agy-agent-acp@8ff8abbf55434caf93f44ffc374e0ec6bbc1ca55" \
+  && agy-agent-acp --help >/dev/null
 
 # --- Gemini CLI (optional fast lane) --------------------------------------------
 # Persistent ACP agent, but since 2026-06-18 it only serves paid API keys /

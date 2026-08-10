@@ -34,6 +34,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Install Paseo globally
 RUN npm install -g @getpaseo/cli
 
+# Run paseo_agy first (before agy is installed) so it gracefully skips the hanging 'agy models' command
+RUN npx --yes @nghichcode/paseo_agy
+
+# Now install agy using the official installer
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 
 # Support OAuth credentials via an environment variable
@@ -66,8 +70,6 @@ RUN echo '#!/bin/bash\n\
   if [ -n "$GITHUB_TOKEN" ]; then\n\
   gh auth setup-git\n\
   fi\n\
-  echo "Setting up bridge..."\n\
-  npx --yes @nghichcode/paseo_agy\n\
   rm -f /root/.paseo/paseo.pid /root/.paseo/daemon.sock\n\
   exec paseo start --foreground' > /entrypoint.sh && chmod +x /entrypoint.sh
 

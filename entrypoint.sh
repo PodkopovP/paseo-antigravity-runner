@@ -94,7 +94,7 @@ config.agents.providers.gemini = {
 
 fs.writeFileSync(path, JSON.stringify(config, null, 2));
 console.log(
-  `Providers configured: antigravity (agy-agent-acp), gemini (${geminiEnabled ? "enabled" : "disabled — no GEMINI_API_KEY"}).`
+  `Providers configured: antigravity-acp (agy-agent-acp), gemini (${geminiEnabled ? "enabled" : "disabled — no GEMINI_API_KEY"}).`
 );
 JS
 

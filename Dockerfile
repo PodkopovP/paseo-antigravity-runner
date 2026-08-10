@@ -49,6 +49,13 @@ RUN npx --yes @nghichcode/paseo_agy
 
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 
+# --- Gemini CLI -----------------------------------------------------------------
+# Runs as a persistent ACP agent (gemini --acp): no per-prompt process spawn,
+# real streaming. Much lower latency than the agy one-shot bridge. Installed
+# globally so agent startup doesn't pay an npx download.
+
+RUN npm install -g @google/gemini-cli@0.54.4
+
 # --- Runtime configuration ----------------------------------------------------
 # Disable dictation and voice mode. They default to ON with the "local"
 # provider, which makes the daemon download ~1GB of ONNX speech models

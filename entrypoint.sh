@@ -42,6 +42,38 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
   gh auth setup-git || echo "WARNING: 'gh auth setup-git' failed; continuing without it."
 fi
 
+# --- Enable the Gemini CLI provider in Paseo ----------------
+# Gemini CLI runs as a persistent ACP agent — no per-prompt cold start,
+# unlike the agy bridge. NOTE: since June 18, 2026 Gemini CLI no longer
+# serves Google AI Pro/Ultra or free individual OAuth accounts, so the
+# provider is only enabled when GEMINI_API_KEY is set (paid/free-tier
+# API key from AI Studio, or a Code Assist Standard/Enterprise setup).
+# Set GEMINI_PROVIDER_ENABLED=false to force it off.
+
+node - <<'JS'
+const fs = require("fs");
+const path = "/root/.paseo/config.json";
+let config = { version: 1 };
+try { config = JSON.parse(fs.readFileSync(path, "utf8")); } catch {}
+config.agents ??= {};
+config.agents.providers ??= {};
+const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
+const enabled = hasApiKey && process.env.GEMINI_PROVIDER_ENABLED !== "false";
+config.agents.providers.gemini = {
+  extends: "acp",
+  label: "Gemini CLI",
+  description: "Google Gemini CLI (persistent ACP agent)",
+  command: ["gemini", "--acp"],
+  enabled,
+};
+fs.writeFileSync(path, JSON.stringify(config, null, 2));
+console.log(
+  enabled
+    ? "Gemini CLI provider enabled (GEMINI_API_KEY present)."
+    : "Gemini CLI provider disabled (no GEMINI_API_KEY set)."
+);
+JS
+
 # --- Sanity check: does 'agy models' respond? ---------------
 # The agy-acp bridge runs 'agy models' in the background every time it
 # starts. If that command hangs (e.g. bad/missing credentials), hung agy

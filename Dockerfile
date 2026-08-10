@@ -67,6 +67,7 @@ RUN echo '#!/bin/bash\n\
   mkdir -p /root/.local/bin\n\
   gh release download v1.0.13 -R google-antigravity/antigravity-cli -p "agy_cli_linux_x64.tar.gz" -O /tmp/agy.tar.gz\n\
   tar -xzf /tmp/agy.tar.gz -C /root/.local/bin\n\
+  find /root/.local/bin -type f -name "agy*" -exec mv {} /root/.local/bin/agy \\;\n\
   chmod +x /root/.local/bin/agy\n\
   export AGY_BIN=/root/.local/bin/agy\n\
   fi\n\

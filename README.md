@@ -32,7 +32,8 @@ prompts delivered to your phone.
 **1. Clone and configure**
 
 ```bash
-git clone <this-repo> && cd <this-repo>
+git clone https://github.com/PodkopovP/paseo-antigravity-runner.git
+cd paseo-antigravity-runner
 cp .env.example .env
 ```
 

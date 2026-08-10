@@ -64,7 +64,7 @@ fi\n\
 if [ -n "$GIT_USER_EMAIL" ]; then\n\
   git config --global user.email "$GIT_USER_EMAIL"\n\
 fi\n\
-rm -f /root/.paseo/daemon.pid /root/.paseo/daemon.sock\n\
+rm -f /root/.paseo/paseo.pid /root/.paseo/daemon.sock\n\
 exec paseo start --foreground' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]

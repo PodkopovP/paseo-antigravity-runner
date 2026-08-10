@@ -92,6 +92,14 @@ ENV PASEO_DICTATION_ENABLED=false \
     PASEO_VOICE_MODE_ENABLED=false \
     PASEO_RELAY_ENABLED=true
 
+# --- Pairing helper --------------------------------------------------------------
+# `paseo onboard` always starts a second daemon chain (it can't detect the
+# directly-run worker), leaving a duplicate supervisor+worker resident.
+# `paseo-pair` prints the pairing QR/link against the running daemon instead.
+
+RUN printf '#!/usr/bin/env bash\nexec node --input-type=module -e "import(\\"file:///usr/lib/node_modules/@getpaseo/cli/dist/commands/daemon/pair.js\\").then((m) => m.runPairCommand({ relay: true }))"\n' > /usr/local/bin/paseo-pair \
+  && chmod +x /usr/local/bin/paseo-pair
+
 # --- Entrypoint ----------------------------------------------------------------
 
 COPY entrypoint.sh /entrypoint.sh

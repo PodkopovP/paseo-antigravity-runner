@@ -56,7 +56,7 @@ docker compose up -d --build
 **4. Pair your phone**
 
 ```bash
-docker compose exec paseo paseo onboard
+docker compose exec paseo paseo-pair
 ```
 
 Scan the QR code (or open the pairing link) with the Paseo app. Pairing is
@@ -64,11 +64,6 @@ end-to-end encrypted; the relay never sees your traffic in plaintext, and no
 inbound ports need to be opened on your server.
 
 **5. Add a repository**
-
-```bash
-docker compose exec paseo bash
-cd /root/dev && git clone https://github.com/you/your-repo
-```
 
 (Set `GITHUB_TOKEN` in `.env` for private repos.) Then open the Paseo app,
 pick the workspace, choose the **Google Antigravity** provider, and go.
@@ -141,7 +136,7 @@ in the compose file must be present (see Persistence above).
 every configured MCP server as a permanent process. Clear the variable and
 restart; the entrypoint removes the stale config automatically.
 
-**Re-pairing** — run `docker compose exec paseo paseo onboard` again on any
+**Re-pairing** — run `docker compose exec paseo paseo-pair` again on any
 new device.
 
 ## Design notes

@@ -78,7 +78,21 @@ patch(
     "append_transcript_batch",
 )
 
-# 3b. Record each turn: buffer the user prompt plus every emitted update and
+# 3b. Replay history BEFORE answering session/load. The ACP contract is that
+#     the agent streams the stored conversation via session/update and only
+#     then responds to session/load; clients (Paseo included) close their
+#     "replaying history" window when the response arrives, so updates sent
+#     after it are treated as live events instead of history.
+patch(
+    server,
+    "                self.send_jsonrpc_response(req_id, result)\n"
+    "                await self._replay_transcript(session_id)\n",
+    "                await self._replay_transcript(session_id)\n"
+    "                self.send_jsonrpc_response(req_id, result)\n",
+    "replay before session/load response",
+)
+
+# 3c. Record each turn: buffer the user prompt plus every emitted update and
 #     flush once when the turn ends (cancelled turns keep their partial
 #     transcript). session/load already replays stored messages via
 #     _replay_transcript — upstream just never recorded any.

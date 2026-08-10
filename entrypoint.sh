@@ -154,6 +154,9 @@ rm -f /root/.paseo/paseo.pid /root/.paseo/daemon.sock
 
 DAEMON_WORKER=/usr/lib/node_modules/@getpaseo/cli/node_modules/@getpaseo/server/dist/server/server/daemon-worker.js
 
+echo "Paseo daemon starting."
+echo "To pair a device, run:  docker exec -it <container> paseo onboard"
+
 if [ "${PASEO_USE_SUPERVISOR:-false}" = "true" ] || [ ! -f "$DAEMON_WORKER" ]; then
   exec paseo start --foreground
 fi

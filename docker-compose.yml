@@ -1,0 +1,33 @@
+services:
+  paseo:
+    build: .
+    container_name: paseo-antigravity
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Paseo daemon state: agent registry, pairing keys, config
+      - paseo-home:/root/.paseo
+      # Antigravity state: conversations, auth token, trust settings
+      - gemini-home:/root/.gemini
+      # ACP adapter state: session bindings + chat transcripts
+      - acp-sessions:/root/.config/antigravity
+      # Your repositories / working directories
+      - workspaces:/root/dev
+    # Guardrail: recycle the container instead of strangling the host if
+    # something blows up. Raise if you run many workspaces at once
+    # (each warm Antigravity harness holds ~220MB).
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "bash", "-c", "timeout 3 bash -c '</dev/tcp/127.0.0.1/6767'"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  paseo-home:
+  gemini-home:
+  acp-sessions:
+  workspaces:

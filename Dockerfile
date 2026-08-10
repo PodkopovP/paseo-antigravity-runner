@@ -78,13 +78,19 @@ RUN python3 /tmp/patch-agy-adapter.py \
 RUN npm install -g @google/gemini-cli@0.54.4
 
 # --- Runtime configuration ----------------------------------------------------
-# Disable dictation and voice mode. They default to ON with the "local"
-# provider, which makes the daemon download ~1GB of ONNX speech models
-# (Kokoro TTS + Parakeet STT) in the background on every fresh container
-# start, and load them into memory when used. Useless on a headless runner.
+# Speech: dictation and voice mode default to ON with the "local" provider,
+# which makes the daemon download ~1GB of ONNX speech models (Kokoro TTS +
+# Parakeet STT) in the background on every fresh container start, and load
+# them into memory when used. Off by default on a headless runner; override
+# via environment if you use Paseo's voice features with a cloud provider.
+#
+# Relay: enables Paseo's end-to-end-encrypted relay so the mobile/web app can
+# reach this daemon from anywhere without exposing ports. Set to false if you
+# only connect over LAN/VPN (e.g. Tailscale) directly to the daemon port.
 
 ENV PASEO_DICTATION_ENABLED=false \
-    PASEO_VOICE_MODE_ENABLED=false
+    PASEO_VOICE_MODE_ENABLED=false \
+    PASEO_RELAY_ENABLED=true
 
 # --- Entrypoint ----------------------------------------------------------------
 

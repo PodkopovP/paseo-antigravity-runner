@@ -57,6 +57,14 @@ RUN pip3 install --no-cache-dir --upgrade pip \
     "git+https://github.com/jameslunardi/agy-agent-acp@8ff8abbf55434caf93f44ffc374e0ec6bbc1ca55" \
   && agy-agent-acp --help >/dev/null
 
+# Patch: the adapter defaults new sessions to read-only unless the ACP client
+# passes allowWriteTools — an adapter-specific extension Paseo never sends —
+# which hard-blocks run_command (classified as a write tool). Default sessions
+# to writable; permission modes still gate each individual action.
+RUN AGY_SERVER=/usr/local/lib/python3.10/dist-packages/agy_agent_acp/server.py \
+  && grep -c "allow_write = False" "$AGY_SERVER" | grep -qx 1 \
+  && sed -i 's/allow_write = False/allow_write = True/' "$AGY_SERVER"
+
 # --- Gemini CLI (optional fast lane) --------------------------------------------
 # Persistent ACP agent, but since 2026-06-18 it only serves paid API keys /
 # Code Assist licenses. The provider is enabled at runtime only when

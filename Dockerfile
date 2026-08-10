@@ -25,10 +25,16 @@ RUN npm install -g paseo
 # Run the paseo_agy installer to download the AGY CLI and set up the ACP bridge
 RUN npx --yes @nghichcode/paseo_agy
 
-# Define standard env variables (populate these in Coolify's Environment Variables tab)
-# The Antigravity CLI (agy) needs to authenticate. Since you can't run `agy auth login` 
-# in a browser on a headless VM, you must provide your API key.
-ENV GOOGLE_API_KEY=""
+# Support OAuth credentials via an environment variable
+ENV OAUTH_CREDS_JSON=""
 
-# The entrypoint runs Paseo's daemon
-CMD ["paseo", "start"]
+# Create an entrypoint script to handle auth credentials
+RUN echo '#!/bin/bash\n\
+if [ -n "$OAUTH_CREDS_JSON" ]; then\n\
+  mkdir -p /root/.gemini\n\
+  echo "$OAUTH_CREDS_JSON" > /root/.gemini/oauth_creds.json\n\
+  echo "Injected OAuth credentials for Antigravity CLI."\n\
+fi\n\
+exec paseo start' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]

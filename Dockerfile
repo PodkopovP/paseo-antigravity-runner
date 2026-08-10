@@ -34,6 +34,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Install Paseo globally
 RUN npm install -g @getpaseo/cli
 
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
+
 # Support OAuth credentials via an environment variable
 ENV OAUTH_CREDS_JSON=""
 
@@ -63,15 +65,8 @@ RUN echo '#!/bin/bash\n\
   fi\n\
   if [ -n "$GITHUB_TOKEN" ]; then\n\
   gh auth setup-git\n\
-  echo "Downloading AGY CLI engine..."\n\
-  mkdir -p /root/.local/bin\n\
-  gh release download v1.0.13 -R google-antigravity/antigravity-cli -p "agy_cli_linux_x64.tar.gz" -O /tmp/agy.tar.gz\n\
-  tar -xzf /tmp/agy.tar.gz -C /root/.local/bin\n\
-  find /root/.local/bin -type f -name "agy*" -exec mv {} /root/.local/bin/agy \\;\n\
-  chmod +x /root/.local/bin/agy\n\
-  export AGY_BIN=/root/.local/bin/agy\n\
   fi\n\
-  echo "Installing AGY CLI and setting up bridge..."\n\
+  echo "Setting up bridge..."\n\
   npx --yes @nghichcode/paseo_agy\n\
   rm -f /root/.paseo/paseo.pid /root/.paseo/daemon.sock\n\
   exec paseo start --foreground' > /entrypoint.sh && chmod +x /entrypoint.sh

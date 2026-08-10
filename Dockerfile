@@ -35,6 +35,12 @@ if [ -n "$OAUTH_CREDS_JSON" ]; then\n\
   echo "$OAUTH_CREDS_JSON" > /root/.gemini/oauth_creds.json\n\
   echo "Injected OAuth credentials for Antigravity CLI."\n\
 fi\n\
+if [ -n "$AGY_OAUTH_TOKEN_B64" ]; then\n\
+  mkdir -p /root/.gemini/antigravity-cli\n\
+  echo "$AGY_OAUTH_TOKEN_B64" | base64 -d > /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
+  chmod 600 /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
+  echo "Injected base64 OAuth token for Antigravity CLI."\n\
+fi\n\
 exec paseo start' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]

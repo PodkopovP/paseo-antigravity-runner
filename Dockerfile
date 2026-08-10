@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
     git \
     build-essential \
     gpg \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI (gh)
@@ -50,6 +52,11 @@ if [ -n "$AGY_OAUTH_TOKEN_B64" ]; then\n\
   echo "$AGY_OAUTH_TOKEN_B64" | base64 -d > /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
   chmod 600 /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
   echo "Injected base64 OAuth token for Antigravity CLI."\n\
+fi\n\
+if [ -n "$MCP_CONFIG_B64" ]; then\n\
+  mkdir -p /root/.gemini/config\n\
+  echo "$MCP_CONFIG_B64" | base64 -d > /root/.gemini/config/mcp_config.json\n\
+  echo "Injected MCP configuration."\n\
 fi\n\
 if [ -n "$GIT_USER_NAME" ]; then\n\
   git config --global user.name "$GIT_USER_NAME"\n\

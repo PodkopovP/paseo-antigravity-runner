@@ -42,13 +42,13 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
   gh auth setup-git || echo "WARNING: 'gh auth setup-git' failed; continuing without it."
 fi
 
-# --- Enable the Gemini CLI provider in Paseo ----------------
-# Gemini CLI runs as a persistent ACP agent — no per-prompt cold start,
-# unlike the agy bridge. NOTE: since June 18, 2026 Gemini CLI no longer
-# serves Google AI Pro/Ultra or free individual OAuth accounts, so the
-# provider is only enabled when GEMINI_API_KEY is set (paid/free-tier
-# API key from AI Studio, or a Code Assist Standard/Enterprise setup).
-# Set GEMINI_PROVIDER_ENABLED=false to force it off.
+# --- Configure Paseo agent providers ------------------------
+# antigravity: agy-agent-acp keeps a warm agy language server per workspace
+#   (~1.3s/turn via its local Connect API). Set AGY_ACP_TRANSPORT=cli to
+#   force the slower spawn-per-turn fallback.
+# gemini: persistent ACP agent, but only serves paid API keys since
+#   2026-06-18 — enabled only when GEMINI_API_KEY is set. Set
+#   GEMINI_PROVIDER_ENABLED=false to force it off.
 
 node - <<'JS'
 const fs = require("fs");
@@ -57,34 +57,52 @@ let config = { version: 1 };
 try { config = JSON.parse(fs.readFileSync(path, "utf8")); } catch {}
 config.agents ??= {};
 config.agents.providers ??= {};
-const hasApiKey = Boolean(process.env.GEMINI_API_KEY);
-const enabled = hasApiKey && process.env.GEMINI_PROVIDER_ENABLED !== "false";
+
+// Drop any provider left over from the old paseo_agy bridge (agy-acp binary).
+for (const [key, provider] of Object.entries(config.agents.providers)) {
+  const command = Array.isArray(provider?.command) ? provider.command : [];
+  if (command.some((arg) => typeof arg === "string" && arg.includes("agy-acp/"))) {
+    delete config.agents.providers[key];
+    console.log(`Removed legacy provider: ${key}`);
+  }
+}
+
+config.agents.providers.antigravity = {
+  extends: "acp",
+  label: "Google Antigravity",
+  description: "Antigravity via agy-agent-acp (warm language server)",
+  command: ["agy-agent-acp"],
+  env: { AGY_ACP_TRANSPORT: process.env.AGY_ACP_TRANSPORT || "connect" },
+  enabled: true,
+};
+
+const geminiEnabled =
+  Boolean(process.env.GEMINI_API_KEY) &&
+  process.env.GEMINI_PROVIDER_ENABLED !== "false";
 config.agents.providers.gemini = {
   extends: "acp",
   label: "Gemini CLI",
   description: "Google Gemini CLI (persistent ACP agent)",
   command: ["gemini", "--acp"],
-  enabled,
+  enabled: geminiEnabled,
 };
+
 fs.writeFileSync(path, JSON.stringify(config, null, 2));
 console.log(
-  enabled
-    ? "Gemini CLI provider enabled (GEMINI_API_KEY present)."
-    : "Gemini CLI provider disabled (no GEMINI_API_KEY set)."
+  `Providers configured: antigravity (agy-agent-acp), gemini (${geminiEnabled ? "enabled" : "disabled — no GEMINI_API_KEY"}).`
 );
 JS
 
 # --- Sanity check: does 'agy models' respond? ---------------
-# The agy-acp bridge runs 'agy models' in the background every time it
-# starts. If that command hangs (e.g. bad/missing credentials), hung agy
-# processes accumulate and eat CPU/RAM. Surface that early in the logs.
+# Validates that the injected credentials give agy a working session.
+# If this hangs, the warm harness and the CLI fallback will both fail.
 
 if command -v agy >/dev/null 2>&1; then
   if timeout 20s agy models >/dev/null 2>&1; then
-    echo "'agy models' responded OK — bridge model discovery will work."
+    echo "'agy models' responded OK — Antigravity auth is working."
   else
-    echo "WARNING: 'agy models' hung or failed. Each agent start will leave a"
-    echo "         stuck background process. Check your injected credentials."
+    echo "WARNING: 'agy models' hung or failed. Check your injected credentials;"
+    echo "         the Antigravity provider will not work until auth is fixed."
   fi
 fi
 

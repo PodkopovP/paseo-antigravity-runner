@@ -1,4 +1,10 @@
 # Paseo + Google Antigravity headless runner
+#
+# Antigravity is bridged into Paseo via agy-agent-acp, which keeps one warm
+# `agy` language server per workspace and drives it over its local Connect
+# API (~1.3s/turn) instead of spawning a fresh `agy` process per prompt
+# (~3.4s/turn). If the private Connect API breaks after an agy upgrade, the
+# adapter degrades to the slower per-turn CLI transport automatically.
 FROM ubuntu:22.04
 
 # Avoid tzdata interactive prompts
@@ -26,11 +32,6 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
   && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
 
-# --- Bun (needed to compile the paseo_agy bridge binary) ---------------------
-
-RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.local/bin:/root/.bun/bin:${PATH}"
-
 # --- Node.js 20 + Paseo CLI ---------------------------------------------------
 
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
@@ -39,20 +40,21 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 
 RUN npm install -g @getpaseo/cli
 
-# --- Antigravity bridge (paseo_agy) -------------------------------------------
-# Run before agy is installed so setup skips the hanging 'agy models' command
-# and falls back to its built-in model list.
-
-RUN npx --yes @nghichcode/paseo_agy
-
 # --- Antigravity CLI (agy) ----------------------------------------------------
 
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
+ENV PATH="/root/.local/bin:${PATH}"
 
-# --- Gemini CLI -----------------------------------------------------------------
-# Runs as a persistent ACP agent (gemini --acp): no per-prompt process spawn,
-# real streaming. Much lower latency than the agy one-shot bridge. Installed
-# globally so agent startup doesn't pay an npx download.
+# --- Antigravity ACP adapter (agy-agent-acp) -----------------------------------
+# Pinned to a known-good commit; bump deliberately after testing.
+
+RUN pip3 install --no-cache-dir \
+  "git+https://github.com/jameslunardi/agy-agent-acp@8ff8abbf55434caf93f44ffc374e0ec6bbc1ca55"
+
+# --- Gemini CLI (optional fast lane) --------------------------------------------
+# Persistent ACP agent, but since 2026-06-18 it only serves paid API keys /
+# Code Assist licenses. The provider is enabled at runtime only when
+# GEMINI_API_KEY is set.
 
 RUN npm install -g @google/gemini-cli@0.54.4
 

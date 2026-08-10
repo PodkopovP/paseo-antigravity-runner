@@ -20,7 +20,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
 # Install Paseo globally
-RUN npm install -g paseo
+RUN npm install -g @getpaseo/cli
 
 # Run the paseo_agy installer to download the AGY CLI and set up the ACP bridge
 RUN npx --yes @nghichcode/paseo_agy

@@ -1,76 +1,66 @@
-# We use a Debian/Ubuntu base to easily install dependencies
+# Paseo + Google Antigravity headless runner
 FROM ubuntu:22.04
 
 # Avoid tzdata interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
+# --- Base dependencies ------------------------------------------------------
+
 RUN apt-get update && apt-get install -y \
-  curl \
-  unzip \
-  git \
-  build-essential \
-  gpg \
-  python3 \
-  python3-pip \
+    build-essential \
+    curl \
+    git \
+    gpg \
+    python3 \
+    python3-pip \
+    unzip \
   && rm -rf /var/lib/apt/lists/*
 
-# Install GitHub CLI (gh)
+# --- GitHub CLI (gh) --------------------------------------------------------
+
 RUN mkdir -p -m 755 /etc/apt/keyrings \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
   && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
   && apt-get update \
-  && apt-get install gh -y \
+  && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
 
-# Install Bun (required by the paseo_agy bridge)
+# --- Bun (needed to compile the paseo_agy bridge binary) ---------------------
+
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.local/bin:/root/.bun/bin:${PATH}"
 
-# Install Node.js (v20)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-  && apt-get install -y nodejs
+# --- Node.js 20 + Paseo CLI ---------------------------------------------------
 
-# Install Paseo globally
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+  && apt-get install -y nodejs \
+  && rm -rf /var/lib/apt/lists/*
+
 RUN npm install -g @getpaseo/cli
 
-# Run paseo_agy first (before agy is installed) so it gracefully skips the hanging 'agy models' command
+# --- Antigravity bridge (paseo_agy) -------------------------------------------
+# Run before agy is installed so setup skips the hanging 'agy models' command
+# and falls back to its built-in model list.
+
 RUN npx --yes @nghichcode/paseo_agy
 
-# Now install agy using the official installer
+# --- Antigravity CLI (agy) ----------------------------------------------------
+
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 
-# Support OAuth credentials via an environment variable
-ENV OAUTH_CREDS_JSON=""
+# --- Runtime configuration ----------------------------------------------------
+# Disable dictation and voice mode. They default to ON with the "local"
+# provider, which makes the daemon download ~1GB of ONNX speech models
+# (Kokoro TTS + Parakeet STT) in the background on every fresh container
+# start, and load them into memory when used. Useless on a headless runner.
 
-# Create an entrypoint script to handle auth credentials
-RUN echo '#!/bin/bash\n\
-  if [ -n "$OAUTH_CREDS_JSON" ]; then\n\
-  mkdir -p /root/.gemini\n\
-  echo "$OAUTH_CREDS_JSON" > /root/.gemini/oauth_creds.json\n\
-  echo "Injected OAuth credentials for Antigravity CLI."\n\
-  fi\n\
-  if [ -n "$AGY_OAUTH_TOKEN_B64" ]; then\n\
-  mkdir -p /root/.gemini/antigravity-cli\n\
-  echo "$AGY_OAUTH_TOKEN_B64" | base64 -d > /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
-  chmod 600 /root/.gemini/antigravity-cli/antigravity-oauth-token\n\
-  echo "Injected base64 OAuth token for Antigravity CLI."\n\
-  fi\n\
-  if [ -n "$MCP_CONFIG_B64" ]; then\n\
-  mkdir -p /root/.gemini/config\n\
-  echo "$MCP_CONFIG_B64" | base64 -d > /root/.gemini/config/mcp_config.json\n\
-  echo "Injected MCP configuration."\n\
-  fi\n\
-  if [ -n "$GIT_USER_NAME" ]; then\n\
-  git config --global user.name "$GIT_USER_NAME"\n\
-  fi\n\
-  if [ -n "$GIT_USER_EMAIL" ]; then\n\
-  git config --global user.email "$GIT_USER_EMAIL"\n\
-  fi\n\
-  if [ -n "$GITHUB_TOKEN" ]; then\n\
-  gh auth setup-git\n\
-  fi\n\
-  rm -f /root/.paseo/paseo.pid /root/.paseo/daemon.sock\n\
-  exec paseo start --foreground' > /entrypoint.sh && chmod +x /entrypoint.sh
+ENV PASEO_DICTATION_ENABLED=false \
+    PASEO_VOICE_MODE_ENABLED=false
+
+# --- Entrypoint ----------------------------------------------------------------
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 CMD ["/entrypoint.sh"]

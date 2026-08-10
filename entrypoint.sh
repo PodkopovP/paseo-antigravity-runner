@@ -137,4 +137,18 @@ fi
 
 rm -f /root/.paseo/paseo.pid /root/.paseo/daemon.sock
 
-exec paseo start --foreground
+# Run the daemon worker directly instead of `paseo start --foreground`.
+# The normal chain (CLI wrapper -> Paseo Supervisor -> Paseo Daemon) keeps
+# two extra Node processes resident (~325MB RSS combined) whose jobs — pid
+# locking, crash restart, self-update — are covered by the container itself
+# (single process tree, Docker restart policy, pinned image). The worker is
+# IPC-tolerant: it skips supervisor messaging when no IPC channel exists.
+# Set PASEO_USE_SUPERVISOR=true to restore the stock chain.
+
+DAEMON_WORKER=/usr/lib/node_modules/@getpaseo/cli/node_modules/@getpaseo/server/dist/server/server/daemon-worker.js
+
+if [ "${PASEO_USE_SUPERVISOR:-false}" = "true" ] || [ ! -f "$DAEMON_WORKER" ]; then
+  exec paseo start --foreground
+fi
+
+exec node "$DAEMON_WORKER"

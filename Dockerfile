@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     gpg \
     python3 \
     python3-pip \
+    tini \
     unzip \
   && rm -rf /var/lib/apt/lists/*
 
@@ -77,4 +78,7 @@ ENV PASEO_DICTATION_ENABLED=false \
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# tini as PID 1: reaps zombie processes (orphaned npm exec/MCP children
+# otherwise accumulate as <defunct>) and forwards signals properly.
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/entrypoint.sh"]

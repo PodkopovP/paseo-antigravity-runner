@@ -58,16 +58,21 @@ try { config = JSON.parse(fs.readFileSync(path, "utf8")); } catch {}
 config.agents ??= {};
 config.agents.providers ??= {};
 
-// Drop any provider left over from the old paseo_agy bridge (agy-acp binary).
+// Drop stale provider entries: old paseo_agy bridge entries (agy-acp binary)
+// and the transient "antigravity" key from an earlier revision of this script.
 for (const [key, provider] of Object.entries(config.agents.providers)) {
   const command = Array.isArray(provider?.command) ? provider.command : [];
-  if (command.some((arg) => typeof arg === "string" && arg.includes("agy-acp/"))) {
+  const isOldBridge = command.some((arg) => typeof arg === "string" && arg.includes("agy-acp/"));
+  const isTransientKey = key === "antigravity" && command[0] === "agy-agent-acp";
+  if (isOldBridge || isTransientKey) {
     delete config.agents.providers[key];
-    console.log(`Removed legacy provider: ${key}`);
+    console.log(`Removed stale provider entry: ${key}`);
   }
 }
 
-config.agents.providers.antigravity = {
+// Keep the provider ID the old bridge used ("antigravity-acp") so drafts and
+// agents persisted by the mobile app keep resolving after the swap.
+config.agents.providers["antigravity-acp"] = {
   extends: "acp",
   label: "Google Antigravity",
   description: "Antigravity via agy-agent-acp (warm language server)",
@@ -96,13 +101,34 @@ JS
 # --- Sanity check: does 'agy models' respond? ---------------
 # Validates that the injected credentials give agy a working session.
 # If this hangs, the warm harness and the CLI fallback will both fail.
+#
+# Run it in its own process group: agy spawns every configured MCP server
+# (from MCP_CONFIG_B64) as child processes, and a plain 'timeout' would kill
+# agy but orphan those children, which then spin on a closed stdin at 100%
+# CPU. Killing the group reaps the lot.
 
 if command -v agy >/dev/null 2>&1; then
-  if timeout 20s agy models >/dev/null 2>&1; then
+  setsid bash -c 'agy models >/dev/null 2>&1' &
+  check_pid=$!
+  agy_ok=false
+  for _ in $(seq 1 30); do
+    if ! kill -0 "$check_pid" 2>/dev/null; then
+      if wait "$check_pid"; then agy_ok=true; fi
+      break
+    fi
+    sleep 1
+  done
+  kill -TERM -- "-$check_pid" 2>/dev/null || true
+  sleep 1
+  kill -KILL -- "-$check_pid" 2>/dev/null || true
+
+  if [ "$agy_ok" = true ]; then
     echo "'agy models' responded OK — Antigravity auth is working."
   else
-    echo "WARNING: 'agy models' hung or failed. Check your injected credentials;"
-    echo "         the Antigravity provider will not work until auth is fixed."
+    echo "WARNING: 'agy models' hung or failed within 30s. Check your injected"
+    echo "         credentials; the Antigravity provider will not work until"
+    echo "         auth is fixed. Note that a large MCP config (MCP_CONFIG_B64)"
+    echo "         also slows agy startup — consider trimming it."
   fi
 fi
 

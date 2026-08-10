@@ -25,7 +25,7 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 
 # Install Bun (required by the paseo_agy bridge)
 RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:${PATH}"
+ENV PATH="/root/.local/bin:/root/.bun/bin:${PATH}"
 
 # Install Node.js (v20)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \

@@ -75,7 +75,7 @@ RUN python3 /tmp/patch-agy-adapter.py \
 # Code Assist licenses. The provider is enabled at runtime only when
 # GEMINI_API_KEY is set.
 
-RUN npm install -g @google/gemini-cli@0.54.4
+RUN npm install -g @google/gemini-cli@0.55.1
 
 # --- Runtime configuration ----------------------------------------------------
 # Speech: dictation and voice mode default to ON with the "local" provider,

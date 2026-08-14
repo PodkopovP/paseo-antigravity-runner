@@ -126,4 +126,58 @@ patch(
     "transcript recording",
 )
 
+# 4. The model dropdown is a hardcoded six-entry list, disconnected from what
+#    `agy models` actually serves — new models (e.g. Gemini 3.7 Flash) never
+#    appear in Paseo's picker even when agy supports them. The entrypoint
+#    captures `agy models` output to ~/.gemini/agy-models.txt at container
+#    start; build the dropdown from that file, keeping the old list (with its
+#    "Gemini 3.1 Pro (Low)" label typo fixed) as a fallback for when the
+#    startup probe failed.
+patch(
+    server,
+    "def parse_bool(val: Any) -> bool:\n",
+    '''_MODEL_CATALOG_PATH = os.path.expanduser("~/.gemini/agy-models.txt")
+_FALLBACK_MODEL_OPTIONS = [
+    {"value": "gemini-3.6-flash-high", "name": "Gemini 3.6 Flash (High)", "label": "Gemini 3.6 Flash (High)"},
+    {"value": "gemini-3.6-flash-medium", "name": "Gemini 3.6 Flash (Medium)", "label": "Gemini 3.6 Flash (Medium)"},
+    {"value": "gemini-3.6-flash-low", "name": "Gemini 3.6 Flash (Low)", "label": "Gemini 3.6 Flash (Low)"},
+    {"value": "gemini-3.1-pro-high", "name": "Gemini 3.1 Pro (High)", "label": "Gemini 3.1 Pro (High)"},
+    {"value": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6 (Thinking)", "label": "Claude Sonnet 4.6 (Thinking)"},
+    {"value": "claude-opus-4-6-thinking", "name": "Claude Opus 4.6 (Thinking)", "label": "Claude Opus 4.6 (Thinking)"},
+]
+
+def _available_model_options() -> list:
+    import re
+    try:
+        options = []
+        with open(_MODEL_CATALOG_PATH, "r", encoding="utf-8") as fh:
+            for line in fh:
+                m = re.match(r"^([A-Za-z0-9][\\w.-]*)\\s{2,}(\\S.*?)\\s*$", line)
+                if m and "-" in m.group(1):
+                    options.append({"value": m.group(1), "name": m.group(2), "label": m.group(2)})
+        if options:
+            return options
+    except OSError:
+        pass
+    return _FALLBACK_MODEL_OPTIONS
+
+def parse_bool(val: Any) -> bool:
+''',
+    "model catalog helper",
+)
+
+patch(
+    server,
+    '                "options": [\n'
+    '                    {"value": "gemini-3.6-flash-high", "name": "Gemini 3.6 Flash (High)", "label": "Gemini 3.6 Flash (High)"},\n'
+    '                    {"value": "gemini-3.6-flash-medium", "name": "Gemini 3.6 Flash (Medium)", "label": "Gemini 3.6 Flash (Medium)"},\n'
+    '                    {"value": "gemini-3.6-flash-low", "name": "Gemini 3.6 Flash (Low)", "label": "Gemini 3.6 Flash (Low)"},\n'
+    '                    {"value": "gemini-3.1-pro-high", "name": "Gemini 3.1 Pro (High)", "label": "Gemini 3.1 Pro (Low)"},\n'
+    '                    {"value": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6 (Thinking)", "label": "Claude Sonnet 4.6 (Thinking)"},\n'
+    '                    {"value": "claude-opus-4-6-thinking", "name": "Claude Opus 4.6 (Thinking)", "label": "Claude Opus 4.6 (Thinking)"}\n'
+    '                ]\n',
+    '                "options": _available_model_options()\n',
+    "model dropdown reads live catalog",
+)
+
 print("all adapter patches applied")

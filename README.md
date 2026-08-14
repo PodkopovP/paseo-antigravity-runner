@@ -119,6 +119,19 @@ If credentials expired, re-run `./scripts/export-credentials.sh >> .env` on your
 </details>
 
 <details>
+<summary><b>New Gemini models missing from the model picker?</b></summary>
+
+The picker is built from `agy models` output captured at container start.
+Restart the container to refresh it (`docker compose restart`). If `agy models`
+itself doesn't list the new model yet, rebuild to pull a newer `agy`:
+
+```bash
+docker compose build --build-arg AGY_REFRESH=$(date +%s)
+docker compose up -d
+```
+</details>
+
+<details>
 <summary><b>How much RAM does this use?</b></summary>
 
 - **~250MB RAM idle**
@@ -142,6 +155,7 @@ The container uses 4 Docker named volumes:
 - **Local patches (`patch-agy-adapter.py`)**:
   1. Default sessions to **writable** (prevents restored sessions reverting to read-only after container restarts).
   2. Enables **transcript persistence** so chat history replays correctly when re-opening sessions in the app.
+  3. **Live model picker** — the adapter's hardcoded model dropdown is replaced with one built from `agy models` output captured at each container start, so new models appear without an adapter update.
 - **Direct daemon worker**: Runs Paseo's daemon worker directly under `tini` without extra supervisor overhead (−~325MB RAM).
 </details>
 

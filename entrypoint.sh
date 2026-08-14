@@ -109,13 +109,20 @@ JS
 # Validates that the injected credentials give agy a working session.
 # If this hangs, the warm harness and the CLI fallback will both fail.
 #
+# On success the output is persisted to ~/.gemini/agy-models.txt — the
+# patched adapter builds Paseo's model dropdown from it, so the picker
+# tracks whatever agy actually serves instead of a hardcoded list. Written
+# via tmp+mv so a killed probe never leaves a truncated catalog; a stale
+# file from a previous start is kept as a better-than-fallback catalog.
+#
 # Run it in its own process group: agy spawns every configured MCP server
 # (from MCP_CONFIG_B64) as child processes, and a plain 'timeout' would kill
 # agy but orphan those children, which then spin on a closed stdin at 100%
 # CPU. Killing the group reaps the lot.
 
 if command -v agy >/dev/null 2>&1; then
-  setsid bash -c 'agy models >/dev/null 2>&1' &
+  mkdir -p /root/.gemini
+  setsid bash -c 'agy models > /root/.gemini/agy-models.txt.tmp 2>/dev/null && mv /root/.gemini/agy-models.txt.tmp /root/.gemini/agy-models.txt' &
   check_pid=$!
   agy_ok=false
   for _ in $(seq 1 30); do
@@ -128,9 +135,10 @@ if command -v agy >/dev/null 2>&1; then
   kill -TERM -- "-$check_pid" 2>/dev/null || true
   sleep 1
   kill -KILL -- "-$check_pid" 2>/dev/null || true
+  rm -f /root/.gemini/agy-models.txt.tmp
 
   if [ "$agy_ok" = true ]; then
-    echo "'agy models' responded OK — Antigravity auth is working."
+    echo "'agy models' responded OK — Antigravity auth is working; model catalog refreshed."
   else
     echo "WARNING: 'agy models' hung or failed within 30s. Check your injected"
     echo "         credentials; the Antigravity provider will not work until"

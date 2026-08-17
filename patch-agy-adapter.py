@@ -138,12 +138,20 @@ patch(
     "def parse_bool(val: Any) -> bool:\n",
     '''_MODEL_CATALOG_PATH = os.path.expanduser("~/.gemini/agy-models.txt")
 _FALLBACK_MODEL_OPTIONS = [
+    {"value": "gemini-3.7-flash-high", "name": "Gemini 3.7 Flash (High)", "label": "Gemini 3.7 Flash (High)"},
+    {"value": "gemini-3.7-flash-medium", "name": "Gemini 3.7 Flash (Medium)", "label": "Gemini 3.7 Flash (Medium)"},
+    {"value": "gemini-3.7-flash-low", "name": "Gemini 3.7 Flash (Low)", "label": "Gemini 3.7 Flash (Low)"},
     {"value": "gemini-3.6-flash-high", "name": "Gemini 3.6 Flash (High)", "label": "Gemini 3.6 Flash (High)"},
     {"value": "gemini-3.6-flash-medium", "name": "Gemini 3.6 Flash (Medium)", "label": "Gemini 3.6 Flash (Medium)"},
     {"value": "gemini-3.6-flash-low", "name": "Gemini 3.6 Flash (Low)", "label": "Gemini 3.6 Flash (Low)"},
+    {"value": "gemini-3.5-flash-high", "name": "Gemini 3.5 Flash (High)", "label": "Gemini 3.5 Flash (High)"},
+    {"value": "gemini-3.5-flash-medium", "name": "Gemini 3.5 Flash (Medium)", "label": "Gemini 3.5 Flash (Medium)"},
+    {"value": "gemini-3.5-flash-low", "name": "Gemini 3.5 Flash (Low)", "label": "Gemini 3.5 Flash (Low)"},
     {"value": "gemini-3.1-pro-high", "name": "Gemini 3.1 Pro (High)", "label": "Gemini 3.1 Pro (High)"},
+    {"value": "gemini-3.1-pro-low", "name": "Gemini 3.1 Pro (Low)", "label": "Gemini 3.1 Pro (Low)"},
     {"value": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6 (Thinking)", "label": "Claude Sonnet 4.6 (Thinking)"},
     {"value": "claude-opus-4-6-thinking", "name": "Claude Opus 4.6 (Thinking)", "label": "Claude Opus 4.6 (Thinking)"},
+    {"value": "gpt-oss-120b-medium", "name": "GPT-OSS 120B (Medium)", "label": "GPT-OSS 120B (Medium)"},
 ]
 
 def _available_model_options() -> list:

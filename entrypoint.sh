@@ -72,6 +72,28 @@ fs.writeFileSync(path, JSON.stringify(config, null, 2));
 console.log(`Remote control enabled in config.json (hostname="${hostname}").`);
 JS
 
+# --- Seed onboarding-complete state ------------------------------------------
+# On a fresh app data dir the hub serves the desktop onboarding wizard, whose
+# final sign-in step only completes inside the desktop shell — in a plain
+# browser it hangs on "Success, Continuing...". Mark onboarding complete
+# before the hub starts. Appending to a text proto merges fields, so this is
+# safe on an existing state file; the grep guard keeps it one-shot.
+
+STATE_FILE=/root/.gemini/antigravity/antigravity_state.pbtxt
+mkdir -p /root/.gemini/antigravity
+if ! grep -q "AGENT_ONBOARDING_STATE_COMPLETED" "$STATE_FILE" 2>/dev/null; then
+  cat >> "$STATE_FILE" <<'EOF'
+post_onboarding: {
+  completed_steps: POST_ONBOARDING_STEP_TYPE_MANAGER_WELCOME
+  completed_steps: POST_ONBOARDING_STEP_TYPE_USAGE_MODE
+  completed_steps: POST_ONBOARDING_STEP_TYPE_AGENT_CONFIGURATION
+  completed_steps: POST_ONBOARDING_STEP_TYPE_ADD_WORKSPACE
+}
+agent_onboarding_completed: AGENT_ONBOARDING_STATE_COMPLETED
+EOF
+  echo "Seeded onboarding-complete state (skips the desktop-only wizard)."
+fi
+
 # --- Git / GitHub -----------------------------------------------------------
 
 if [ -n "${GIT_USER_NAME:-}" ]; then git config --global user.name "$GIT_USER_NAME"; fi

@@ -1,33 +1,38 @@
 services:
-  paseo:
-    build: .
-    container_name: paseo-antigravity
+  antigravity-remote:
+    build:
+      context: .
+      args:
+        # Linux tarball of the Antigravity 2.0 app (hub), from the
+        # "Antigravity 2.0" section of https://antigravity.google/download.
+        ANTIGRAVITY_HUB_URL: "${ANTIGRAVITY_HUB_URL:-}"
+        ANTIGRAVITY_HUB_SHA512: "${ANTIGRAVITY_HUB_SHA512:-}"
+    container_name: antigravity-remote
     restart: unless-stopped
     env_file:
       - path: .env
         required: false
+    # Only needed for LAN/VPN access or if you run your own tunnel. With a
+    # CLOUDFLARE_TUNNEL_TOKEN the container reaches the edge outbound-only and
+    # you can drop this mapping entirely.
+    ports:
+      - "127.0.0.1:8765:8765"
     volumes:
-      # Paseo daemon state: agent registry, pairing keys, config
-      - paseo-home:/root/.paseo
-      # Antigravity state: conversations, auth token, trust settings
+      # Antigravity state: auth tokens, config, conversations.
       - gemini-home:/root/.gemini
-      # ACP adapter state: session bindings + chat transcripts
-      - acp-sessions:/root/.config/antigravity
-      # Your repositories / working directories
+      # Your repositories / working directories.
       - workspaces:/root/dev
-    # Guardrail: recycle the container instead of strangling the host if
-    # something blows up. Raise if you run many workspaces at once
-    # (each warm Antigravity harness holds ~220MB).
+    # Each warm hub harness holds a few hundred MB; recycle instead of
+    # strangling the host. Raise if you open many workspaces at once.
     mem_limit: 2g
     healthcheck:
-      test: ["CMD", "bash", "-c", "timeout 3 bash -c '</dev/tcp/127.0.0.1/6767'"]
+      test:
+        ["CMD", "bash", "-c", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8765'"]
       interval: 30s
       timeout: 5s
-      start_period: 30s
+      start_period: 45s
       retries: 3
 
 volumes:
-  paseo-home:
   gemini-home:
-  acp-sessions:
   workspaces:

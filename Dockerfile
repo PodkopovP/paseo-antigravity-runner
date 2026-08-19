@@ -1,111 +1,125 @@
-# Paseo + Google Antigravity headless runner
+# Antigravity Remote (self-hosted)
 #
-# Antigravity is bridged into Paseo via agy-agent-acp, which keeps one warm
-# `agy` language server per workspace and drives it over its local Connect
-# API (~1.3s/turn) instead of spawning a fresh `agy` process per prompt
-# (~3.4s/turn). If the private Connect API breaks after an agy upgrade, the
-# adapter degrades to the slower per-turn CLI transport automatically.
+# Runs the Antigravity 2.0 hub language server headless in standalone "hub"
+# mode. That one process serves the full Antigravity web UI and the agent
+# backend on a single local HTTP port. A tiny Node reverse proxy rewrites the
+# Host/Origin headers so a Cloudflare Tunnel can reach it (the hub 401s any
+# non-localhost Host), and cloudflared publishes it to the edge.
+#
+# Build:
+#   docker compose build \
+#     --build-arg ANTIGRAVITY_HUB_URL="https://storage.googleapis.com/antigravity-public/antigravity-hub/<ver>-<build>/linux-x64/Antigravity.tar.gz"
+#
+# The URL is the Linux tarball of the *Antigravity 2.0* app (the hub / agent
+# manager) from the "Antigravity 2.0" section of
+# https://antigravity.google/download. The version-pinned URL changes each
+# release, so it must be supplied at build time. Note that
+# https://antigravity.google/download/linux serves the Antigravity *IDE*
+# instead, which this build rejects (see the guard below).
+
+# --- Stage 1: fetch and extract the hub language server ---------------------
+FROM ubuntu:22.04 AS fetch
+
+ARG ANTIGRAVITY_HUB_URL
+ARG ANTIGRAVITY_HUB_SHA512=""
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y curl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+RUN set -eux; \
+  if [ -z "${ANTIGRAVITY_HUB_URL}" ]; then \
+    echo "ERROR: ANTIGRAVITY_HUB_URL build-arg is required."; \
+    echo "Grab the Antigravity 2.0 (hub) Linux tarball URL from the"; \
+    echo "'Antigravity 2.0' section of https://antigravity.google/download"; \
+    exit 1; \
+  fi; \
+  curl -fsSL -o payload "${ANTIGRAVITY_HUB_URL}"; \
+  if [ -n "${ANTIGRAVITY_HUB_SHA512}" ]; then \
+    echo "${ANTIGRAVITY_HUB_SHA512}  payload" | sha512sum -c -; \
+  fi; \
+  mkdir -p extracted; \
+  case "${ANTIGRAVITY_HUB_URL}" in \
+    *.deb) dpkg-deb -x payload extracted ;; \
+    *)     tar -xf payload -C extracted ;; \
+  esac; \
+  ls_bin="$(find extracted -type f \( -name language_server -o -name 'language_server_*' \) | head -n1)"; \
+  if [ -z "${ls_bin}" ]; then echo "language_server not found in archive"; exit 1; fi; \
+  echo "Found language server at ${ls_bin}"; \
+  # Guard: only the "Antigravity" (hub) desktop app embeds the web bundle. The \
+  # "Antigravity IDE" (VS Code fork) build omits it and fatals at runtime with \
+  # 'embedded web bundle not available ... without include_agyhub_bundle tag'. \
+  # Reject that build now with an actionable message instead of a crash loop. \
+  if grep -aq "embedded web bundle not available" "${ls_bin}"; then \
+    echo "ERROR: this archive is the Antigravity *IDE* (VS Code fork) build."; \
+    echo "Its language server has no embedded web UI bundle and cannot serve"; \
+    echo "the hub. You need the *Antigravity* desktop app (com.google.antigravity,"; \
+    echo "the agent manager that serves the local web UI), Linux build."; \
+    exit 1; \
+  fi; \
+  if ! grep -aq "compiled_tailwind.css" "${ls_bin}"; then \
+    echo "ERROR: language server does not appear to embed the hub web bundle."; \
+    exit 1; \
+  fi; \
+  bindir="$(dirname "${ls_bin}")"; \
+  echo "Found hub binaries in ${bindir}"; \
+  mkdir -p /opt/antigravity/bin; \
+  cp -a "${bindir}/." /opt/antigravity/bin/; \
+  cp -a "${ls_bin}" /opt/antigravity/bin/language_server; \
+  chmod +x /opt/antigravity/bin/language_server; \
+  [ -f /opt/antigravity/bin/webm_encoder ] && chmod +x /opt/antigravity/bin/webm_encoder || true
+
+# --- Stage 2: runtime image -------------------------------------------------
 FROM ubuntu:22.04
 
-# Avoid tzdata interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
-# --- Base dependencies ------------------------------------------------------
-
 RUN apt-get update && apt-get install -y \
-    build-essential \
+    ca-certificates \
     curl \
     git \
     gpg \
-    python3 \
-    python3-pip \
     tini \
-    unzip \
   && rm -rf /var/lib/apt/lists/*
 
-# --- GitHub CLI (gh) --------------------------------------------------------
-
+# GitHub CLI (for the agent's git workflows inside workspaces).
 RUN mkdir -p -m 755 /etc/apt/keyrings \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
   && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
-  && apt-get update \
-  && apt-get install -y gh \
+  && apt-get update && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
 
-# --- Node.js 20 + Paseo CLI ---------------------------------------------------
-
+# Node.js 20 — only used for the ~80-line dependency-free reverse proxy.
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
   && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @getpaseo/cli
+# cloudflared — publishes the proxy to the Cloudflare edge via a tunnel token.
+RUN arch="$(dpkg --print-architecture)" \
+  && curl -fsSL -o /usr/local/bin/cloudflared \
+     "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${arch}" \
+  && chmod +x /usr/local/bin/cloudflared
 
-# --- Antigravity CLI (agy) ----------------------------------------------------
+# Hub language server from stage 1.
+COPY --from=fetch /opt/antigravity/bin /opt/antigravity/bin
+RUN ln -sf /opt/antigravity/bin/language_server /usr/local/bin/language_server
+ENV LANGUAGE_SERVER_BIN=/opt/antigravity/bin/language_server
 
-RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
-ENV PATH="/root/.local/bin:${PATH}"
-
-# --- Antigravity ACP adapter (agy-agent-acp) -----------------------------------
-# Pinned to a known-good commit; bump deliberately after testing.
-# Ubuntu 22.04's pip (22.0.2) is too old for this package's PEP 621/639
-# metadata — it silently builds "UNKNOWN-0.0.0" with no console script.
-# Upgrade pip first.
-
-RUN pip3 install --no-cache-dir --upgrade pip \
-  && pip3 install --no-cache-dir \
-    "git+https://github.com/jameslunardi/agy-agent-acp@8ff8abbf55434caf93f44ffc374e0ec6bbc1ca55" \
-  && agy-agent-acp --help >/dev/null
-
-# Apply local patches to the pinned adapter — write-tools defaults (Paseo
-# never sends the adapter-specific allowWriteTools extension, and restored
-# sessions reverted to read-only after restarts) and transcript persistence
-# (upstream stores/replays chat history but never records it). The script
-# fails the build if upstream code drifts under the pin.
-COPY patch-agy-adapter.py /tmp/patch-agy-adapter.py
-RUN python3 /tmp/patch-agy-adapter.py \
-  && python3 -m py_compile \
-    /usr/local/lib/python3.10/dist-packages/agy_agent_acp/server.py \
-    /usr/local/lib/python3.10/dist-packages/agy_agent_acp/session_store.py \
-    /usr/local/lib/python3.10/dist-packages/agy_agent_acp/adapter.py \
-  && rm /tmp/patch-agy-adapter.py
-
-# --- Gemini CLI (optional fast lane) --------------------------------------------
-# Persistent ACP agent, but since 2026-06-18 it only serves paid API keys /
-# Code Assist licenses. The provider is enabled at runtime only when
-# GEMINI_API_KEY is set.
-
-RUN npm install -g @google/gemini-cli@0.55.1
-
-# --- Runtime configuration ----------------------------------------------------
-# Speech: dictation and voice mode default to ON with the "local" provider,
-# which makes the daemon download ~1GB of ONNX speech models (Kokoro TTS +
-# Parakeet STT) in the background on every fresh container start, and load
-# them into memory when used. Off by default on a headless runner; override
-# via environment if you use Paseo's voice features with a cloud provider.
-#
-# Relay: enables Paseo's end-to-end-encrypted relay so the mobile/web app can
-# reach this daemon from anywhere without exposing ports. Set to false if you
-# only connect over LAN/VPN (e.g. Tailscale) directly to the daemon port.
-
-ENV PASEO_DICTATION_ENABLED=false \
-    PASEO_VOICE_MODE_ENABLED=false \
-    PASEO_RELAY_ENABLED=true
-
-# --- Pairing helper --------------------------------------------------------------
-# `paseo onboard` always starts a second daemon chain (it can't detect the
-# directly-run worker), leaving a duplicate supervisor+worker resident.
-# `paseo-pair` prints the pairing QR/link against the running daemon instead.
-
-RUN printf '#!/usr/bin/env bash\nexec node --input-type=module -e "import(\\"file:///usr/lib/node_modules/@getpaseo/cli/dist/commands/daemon/pair.js\\").then((m) => m.runPairCommand({ relay: true }))"\n' > /usr/local/bin/paseo-pair \
-  && chmod +x /usr/local/bin/paseo-pair
-
-# --- Entrypoint ----------------------------------------------------------------
-
+# App code.
+WORKDIR /app
+COPY proxy.js /app/proxy.js
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# tini as PID 1: reaps zombie processes (orphaned npm exec/MCP children
-# otherwise accumulate as <defunct>) and forwards signals properly.
+# Hub binds loopback on HUB_HTTP_PORT; the proxy listens on PROXY_LISTEN_PORT.
+ENV HUB_HTTP_PORT=8090 \
+    PROXY_LISTEN_PORT=8765
+
+EXPOSE 8765
+
+# tini as PID 1: reaps the sidecar/MCP children the hub spawns and forwards
+# signals so `docker stop` shuts the tree down cleanly.
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/entrypoint.sh"]

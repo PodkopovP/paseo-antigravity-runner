@@ -1,40 +1,48 @@
 #!/usr/bin/env bash
 # Export Antigravity credentials from this machine in .env format.
 #
-# Run on the machine where you are logged in to Antigravity (the IDE or the
-# `agy` CLI), then paste the output into the .env file next to
-# docker-compose.yml — or redirect it there directly:
+# Run on the machine where you are logged in to Antigravity (the Antigravity
+# app or the `agy` CLI), then append the output to the .env next to
+# docker-compose.yml:
 #
 #   ./scripts/export-credentials.sh >> .env
 #
+# It exports every credential file it finds so whichever one the standalone
+# hub reads is present in the container.
 set -u
 
-TOKEN_FILE="$HOME/.gemini/antigravity-cli/antigravity-oauth-token"
-CREDS_FILE="$HOME/.gemini/oauth_creds.json"
-
+GEMINI="$HOME/.gemini"
 found=false
 
-if [ -f "$TOKEN_FILE" ]; then
-  token_b64=$(base64 < "$TOKEN_FILE" | tr -d '\n')
-  echo "AGY_OAUTH_TOKEN_B64=$token_b64"
-  found=true
-else
-  echo "# $TOKEN_FILE not found — skipping AGY_OAUTH_TOKEN_B64" >&2
-fi
+emit_json() { # var, file
+  if [ -f "$2" ]; then
+    printf '%s=%s\n' "$1" "$(tr -d '\n' < "$2")"
+    found=true
+  else
+    echo "# $2 not found — skipping $1" >&2
+  fi
+}
 
-if [ -f "$CREDS_FILE" ]; then
-  creds=$(tr -d '\n' < "$CREDS_FILE")
-  echo "OAUTH_CREDS_JSON=$creds"
-  found=true
-else
-  echo "# $CREDS_FILE not found — skipping OAUTH_CREDS_JSON" >&2
-fi
+emit_b64() { # var, file
+  if [ -f "$2" ]; then
+    printf '%s=%s\n' "$1" "$(base64 < "$2" | tr -d '\n')"
+    found=true
+  else
+    echo "# $2 not found — skipping $1" >&2
+  fi
+}
+
+emit_json OAUTH_CREDS_JSON                "$GEMINI/oauth_creds.json"
+emit_json GOOGLE_ACCOUNTS_JSON            "$GEMINI/google_accounts.json"
+emit_b64  JETSKI_STANDALONE_OAUTH_TOKEN_B64 "$GEMINI/jetski-standalone-oauth-token"
+emit_b64  AGY_OAUTH_TOKEN_B64             "$GEMINI/antigravity-cli/antigravity-oauth-token"
 
 if [ "$found" = false ]; then
-  echo "" >&2
-  echo "No Antigravity credentials found under ~/.gemini." >&2
-  echo "Log in first: install Antigravity and run 'agy' once, or sign in" >&2
-  echo "through the Antigravity IDE, then re-run this script." >&2
+  {
+    echo ""
+    echo "No Antigravity credentials found under ~/.gemini."
+    echo "Log in first: open the Antigravity app or run 'agy' once, then re-run."
+  } >&2
   exit 1
 fi
 

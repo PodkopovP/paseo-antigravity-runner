@@ -1,30 +1,23 @@
-# Antigravity Remote — self-hosted
+# Antigravity Remote Control — self-hosted
 
-Run **Google Antigravity** headless on your own server and use its **built-in
-web UI** from your phone or any browser — secured with a **Cloudflare Tunnel +
-WARP**, no inbound ports open.
+Run the **official Antigravity Remote Control daemon** headless on your own
+server in Docker, and drive it from your phone or any browser via Google's
+hosted [Remote Control dashboard](https://antigravity.google.com) —
+**outbound connections only**: no open ports, no tunnel, no reverse proxy.
 
-This replaces the old Paseo + `agy-agent-acp` bridge. Antigravity 2.0 already
-ships a complete remote web experience: the hub language server, run in
-`--standalone --subclient_type hub` mode, serves the full Antigravity UI *and*
-the agent backend on one local HTTP port. We just run that in a container,
-front it with a header-rewriting proxy, and publish it through Cloudflare.
+Antigravity now ships remote control natively
+(<https://antigravity.google/docs/remote-control/>): `agy --remote-control`
+connects a machine to the dashboard, where the full agent-manager UI runs
+against it. This repo simply wraps that daemon in a container so it survives
+reboots, stays isolated from the host, and carries git + GitHub CLI for the
+agents' workspaces.
 
 ```
-┌──────────────┐   HTTPS    ┌ Cloudflare edge ┐   tunnel   ┌──────────── your server ────────────┐
-│ phone/browser│ ─────────► │ Access + WARP    │ ─────────► │ cloudflared → proxy :8765 → hub LS  │
-└──────────────┘            └──────────────────┘  outbound  │  (rewrites Host/Origin → 127.0.0.1) │
-                                                             └──────────────────────────────────────┘
+┌──────────────┐   HTTPS   ┌ antigravity.google.com ┐   outbound   ┌── your server ───────┐
+│ phone/browser│ ────────► │ Remote Control          │ ◄─────────── │ agy --remote-control │
+└──────────────┘           │ dashboard (Google)      │              │     (in Docker)      │
+                           └──────────────────────────┘              └──────────────────────┘
 ```
-
-## Why the proxy?
-
-The hub server binds loopback and **rejects any request whose `Host` header
-isn't `localhost`/`127.0.0.1` with a `401`** (a foreign `Origin` is fine — only
-`Host` is checked). A Cloudflare Tunnel forwards the public hostname in `Host`,
-which the hub would reject. `proxy.js` (dependency-free Node, HTTP + WebSocket)
-rewrites `Host`/`Origin` to the loopback address so the browser can talk to
-`https://<your-hostname>/` while the hub only ever sees `127.0.0.1`.
 
 ---
 
@@ -34,23 +27,10 @@ rewrites `Host`/`Origin` to the loopback address so the browser can talk to
 curl -fsSL https://raw.githubusercontent.com/PodkopovP/paseo-antigravity-runner/main/setup.sh | bash
 ```
 
-The script checks prerequisites, creates `.env`, auto-exports local Antigravity
-credentials if present, builds, and starts the container.
-
-You must set two things in `.env` before it can build/run:
-
-1. **`ANTIGRAVITY_HUB_URL`** — the Linux tarball of the **Antigravity 2.0**
-   app (the hub / agent manager) from the *Antigravity 2.0* section of
-   <https://antigravity.google/download>, e.g.
-   `https://storage.googleapis.com/antigravity-public/antigravity-hub/2.8.1-6512087774658560/linux-x64/Antigravity.tar.gz`.
-   The URL is version-pinned and changes each release, so it can't be
-   hardcoded. ⚠️ Don't use `antigravity.google/download/linux` — that page
-   serves the Antigravity **IDE** (VS Code fork), whose language server has no
-   embedded web UI; the build rejects it with an explanatory error.
-2. **Antigravity credentials** — `./scripts/export-credentials.sh >> .env`
-   (run on a machine already logged in to Antigravity).
-
-Optionally set **`CLOUDFLARE_TUNNEL_TOKEN`** to publish through Cloudflare.
+The script checks prerequisites, creates `.env`, auto-exports local
+Antigravity credentials if present, builds, signs you in if needed, and
+starts the container. Then open <https://antigravity.google.com> with the
+same Google Account — your instance appears in the list.
 
 ---
 
@@ -59,85 +39,85 @@ Optionally set **`CLOUDFLARE_TUNNEL_TOKEN`** to publish through Cloudflare.
 ```bash
 git clone https://github.com/PodkopovP/paseo-antigravity-runner.git
 cd paseo-antigravity-runner
-cp .env.example .env
-
-# 1. Hub binary: paste the "Antigravity 2.0" Linux tarball URL into .env
-#    (from https://antigravity.google/download — NOT /download/linux, that's the IDE)
-#    ANTIGRAVITY_HUB_URL=https://storage.googleapis.com/antigravity-public/antigravity-hub/<ver>-<build>/linux-x64/Antigravity.tar.gz
-
-# 2. Credentials (run on a logged-in machine):
-./scripts/export-credentials.sh >> .env
-
-# 3. Cloudflare tunnel token (optional, from Zero Trust > Networks > Tunnels):
-#    CLOUDFLARE_TUNNEL_TOKEN=...
-
-# 4. Build & launch
-docker compose up -d --build
+cp .env.example .env          # everything in it is optional
+docker compose build
 ```
 
----
+Then sign in **one** of two ways:
 
-## 🔒 Securing with Cloudflare Tunnel + WARP
+```bash
+# a) One-time interactive sign-in inside the container (prints a URL to open):
+docker compose run --rm antigravity-remote
 
-With `CLOUDFLARE_TUNNEL_TOKEN` set, `cloudflared` runs inside the container and
-connects outbound only. In the **Cloudflare Zero Trust** dashboard:
+# b) Or export credentials from a machine already logged in to Antigravity:
+./scripts/export-credentials.sh >> .env
+```
 
-1. **Tunnel route** — point your tunnel's public hostname at
-   `http://localhost:8765`.
-2. **Access application** — add a self-hosted Access app over that hostname so
-   every request is authenticated at the edge.
-3. **WARP / identity** — require WARP enrollment (or your IdP) in the Access
-   policy, so only your enrolled devices reach the UI.
+And launch:
 
-Then open the hostname on your phone — it's the full Antigravity web UI.
+```bash
+docker compose up -d
+```
 
-Without a token, only the local `127.0.0.1:8765` proxy port is exposed; reach
-it over LAN/VPN (e.g. Tailscale) or run your own tunnel.
+The auth token lives in the `gemini-home` volume, so sign-in is one-time; the
+daemon refreshes it automatically from then on.
 
 ---
 
 ## 🔄 Updating
 
-```bash
-./setup.sh                      # pulls, rebuilds, restarts
-# or
-git pull && docker compose up -d --build
-```
+The Antigravity CLI self-updates in the background while the daemon runs, and
+any downloaded update is applied on container start — so:
 
-To pick up a new Antigravity release, update `ANTIGRAVITY_HUB_URL` in `.env`
-and rebuild.
+```bash
+docker compose restart        # apply a pending CLI update
+./setup.sh                    # update this repo, rebuild, restart
+```
 
 ---
 
 ## ⚙️ Configuration reference
 
+All optional, set in `.env`:
+
 | Variable | Purpose |
 | --- | --- |
-| `ANTIGRAVITY_HUB_URL` | **(required, build-time)** Linux Antigravity 2.0 archive URL |
-| `ANTIGRAVITY_HUB_SHA512` | optional archive checksum |
 | `OAUTH_CREDS_JSON` | `~/.gemini/oauth_creds.json` contents |
-| `JETSKI_STANDALONE_OAUTH_TOKEN_B64` | base64 of `~/.gemini/jetski-standalone-oauth-token` |
+| `JETSKI_STANDALONE_OAUTH_TOKEN_B64` | base64 of `~/.gemini/jetski-standalone-oauth-token` — the token the remote-control daemon uses |
 | `AGY_OAUTH_TOKEN_B64` | base64 of `~/.gemini/antigravity-cli/antigravity-oauth-token` |
 | `GOOGLE_ACCOUNTS_JSON` | `~/.gemini/google_accounts.json` contents |
-| `CLOUDFLARE_TUNNEL_TOKEN` | Cloudflare tunnel token; enables in-container `cloudflared` |
-| `AGY_HOSTNAME` | hostname label for this instance (default: container hostname) |
+| `AGY_HOSTNAME` | instance name shown in the dashboard (default: saved name, or auto-generated) |
 | `GIT_USER_NAME` / `GIT_USER_EMAIL` | git identity inside workspaces |
 | `GITHUB_TOKEN` | lets the agent push / open PRs |
-| `HUB_HTTP_PORT` | internal hub HTTP port (default `8090`) |
-| `PROXY_LISTEN_PORT` | proxy / published port (default `8765`) |
+
+Credential values are only seeded into the container on **first** start;
+tokens the daemon refreshes afterwards take precedence.
 
 ---
 
 ## 🧩 How it works
 
-- **`language_server --standalone --subclient_type hub`** — one process, the
-  whole Antigravity 2.0 experience (web UI assets are embedded in the binary),
-  on `HUB_HTTP_PORT`. A per-start CSRF token is embedded into the served HTML,
-  so the browser picks it up automatically.
-- **`proxy.js`** — rewrites `Host`/`Origin` to `127.0.0.1` for HTTP and
-  WebSocket upgrades so tunnelled traffic passes the hub's Host check.
-- **`cloudflared`** — outbound tunnel to the Cloudflare edge; secured by Access
-  + WARP.
-- **`entrypoint.sh`** — injects credentials, enables the built-in remote-control
-  setting in `~/.gemini/config/config.json`, launches and supervises the three
-  processes.
+- **`agy --remote-control`** — the official Antigravity CLI daemon
+  (installed at build time from <https://antigravity.google/cli/install.sh>).
+  It registers this machine with Google's Remote Control service over an
+  outbound connection and executes agent tasks locally in `/root/dev`.
+- **`entrypoint.sh`** — seeds credentials, configures git/GitHub, applies any
+  pending CLI update (`agy --bg-updater`, like the official systemd unit),
+  handles the one-time interactive sign-in, then `exec`s the daemon.
+- **Access control** is Google's: the dashboard requires the same Google
+  Account that signed in the daemon.
+
+---
+
+## 🧳 Migrating from the hub/proxy version
+
+Earlier versions of this repo self-hosted the Antigravity 2.0 hub web UI
+behind a host-rewriting proxy and a Cloudflare Tunnel. The official daemon
+replaces all of that:
+
+- `git pull && docker compose up -d --build` — done. Your sign-in and state
+  carry over via the `gemini-home` volume.
+- These `.env` entries are now ignored and can be deleted:
+  `ANTIGRAVITY_HUB_URL`, `ANTIGRAVITY_HUB_SHA512`, `CLOUDFLARE_TUNNEL_TOKEN`.
+- The Cloudflare tunnel, Access application, and the `127.0.0.1:8765` port
+  mapping are no longer used and can be decommissioned.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Antigravity Remote (self-hosted) — One-Line Installer & Updater
+# Antigravity Remote Control (self-hosted) — One-Line Installer & Updater
 # ==============================================================================
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/PodkopovP/paseo-antigravity-runner/main/setup.sh | bash
@@ -19,7 +19,7 @@ fatal()   { error "$1"; exit 1; }
 
 echo -e "${BOLD}"
 echo "============================================================"
-echo "  🛰  Antigravity Remote (self-hosted) — Setup & Update"
+echo "  🛰  Antigravity Remote Control (self-hosted) — Setup"
 echo "============================================================"
 echo -e "${NC}"
 
@@ -54,53 +54,55 @@ if [[ ! -f ".env" ]]; then
     info "Creating .env from .env.example..."; cp .env.example .env
 fi
 
-# Hub download URL (required at build time).
-if ! grep -qE '^ANTIGRAVITY_HUB_URL=[^[:space:]]+' .env 2>/dev/null; then
-    warn "------------------------------------------------------------"
-    warn "ANTIGRAVITY_HUB_URL is not set in .env."
-    warn "Grab the 'Antigravity 2.0' Linux tarball URL from:"
-    warn "  https://antigravity.google/download   (the Antigravity 2.0 section —"
-    warn "  NOT /download/linux, which serves the IDE build this image rejects)"
-    warn "and set ANTIGRAVITY_HUB_URL= in .env, then re-run this script."
-    warn "------------------------------------------------------------"
-    exit 1
-fi
-
-# Antigravity credentials.
+HAS_CREDS=false
 if grep -qE '^(OAUTH_CREDS_JSON|JETSKI_STANDALONE_OAUTH_TOKEN_B64|AGY_OAUTH_TOKEN_B64)=[^[:space:]]+' .env 2>/dev/null; then
     success "Antigravity credentials found in .env."
+    HAS_CREDS=true
 elif [[ -f "$HOME/.gemini/oauth_creds.json" || -f "$HOME/.gemini/jetski-standalone-oauth-token" || -f "$HOME/.gemini/antigravity-cli/antigravity-oauth-token" ]]; then
     info "Found local Antigravity credentials — exporting to .env..."
     bash ./scripts/export-credentials.sh >> .env && success "Credentials auto-exported into .env."
-else
-    warn "------------------------------------------------------------"
-    warn "NO ANTIGRAVITY CREDENTIALS DETECTED."
-    warn "The UI will load but Antigravity will be unavailable until auth is set."
-    warn "On a logged-in machine:  ./scripts/export-credentials.sh >> .env"
-    warn "then:  $COMPOSE_CMD up -d"
-    warn "------------------------------------------------------------"
+    HAS_CREDS=true
 fi
 
-# 4. Build & launch (URL comes from .env via ANTIGRAVITY_HUB_URL).
-info "Building and starting container with $COMPOSE_CMD..."
-$COMPOSE_CMD up -d --build
+# 4. Build
+info "Building image with $COMPOSE_CMD..."
+$COMPOSE_CMD build
 
-# 5. Next steps
-echo ""
-echo -e "${GREEN}${BOLD}============================================================${NC}"
-echo -e "${GREEN}${BOLD} 🎉 Antigravity Remote is up! ${NC}"
-echo -e "${GREEN}${BOLD}============================================================${NC}"
-echo ""
-if grep -qE '^CLOUDFLARE_TUNNEL_TOKEN=[^[:space:]]+' .env 2>/dev/null; then
-  echo -e "${BOLD}cloudflared is running in-container.${NC}"
-  echo -e "In the Cloudflare Zero Trust dashboard:"
-  echo -e "  1. Point your tunnel's public hostname at ${BLUE}http://localhost:8765${NC}"
-  echo -e "  2. Add an ${BOLD}Access${NC} application over that hostname"
-  echo -e "  3. Require ${BOLD}WARP${NC} / your identity provider in the Access policy"
-  echo -e "Then open the hostname on your phone — it's the full Antigravity UI."
-else
-  echo -e "No CLOUDFLARE_TUNNEL_TOKEN set. The host-rewrite proxy is on ${BLUE}127.0.0.1:8765${NC}."
-  echo -e "Reach it over LAN/VPN, or set CLOUDFLARE_TUNNEL_TOKEN in .env and re-run."
+# 5. First-time sign-in (only when no credentials were found)
+# A previous in-container sign-in may already live in the gemini-home volume.
+if [[ "$HAS_CREDS" == "false" ]]; then
+    if $COMPOSE_CMD run --rm --no-deps -T antigravity-remote \
+         test -s /root/.gemini/jetski-standalone-oauth-token >/dev/null 2>&1; then
+        success "Existing sign-in found in the container volume."
+        HAS_CREDS=true
+    elif [[ -t 0 ]]; then
+        info "No credentials found — starting one-time interactive sign-in..."
+        $COMPOSE_CMD run --rm antigravity-remote && HAS_CREDS=true || \
+            warn "Sign-in did not complete; you can retry later (see below)."
+    fi
 fi
+
+# 6. Launch
+info "Starting container with $COMPOSE_CMD..."
+$COMPOSE_CMD up -d
+
+# 7. Next steps
+echo ""
+echo -e "${GREEN}${BOLD}============================================================${NC}"
+echo -e "${GREEN}${BOLD} 🎉 Antigravity Remote Control is up! ${NC}"
+echo -e "${GREEN}${BOLD}============================================================${NC}"
+echo ""
+if [[ "$HAS_CREDS" == "true" ]]; then
+  echo -e "Open ${BLUE}https://antigravity.google.com${NC} with the same Google"
+  echo -e "Account to see this instance and drive it from any browser."
+else
+  echo -e "${BOLD}Not signed in yet.${NC} Complete the one-time sign-in with:"
+  echo -e "  ${BLUE}$COMPOSE_CMD run --rm antigravity-remote${NC}"
+  echo -e "then restart the daemon:"
+  echo -e "  ${BLUE}$COMPOSE_CMD up -d --force-recreate${NC}"
+  echo -e "Alternatively, on a logged-in machine:"
+  echo -e "  ${BLUE}./scripts/export-credentials.sh >> .env && $COMPOSE_CMD up -d --force-recreate${NC}"
+fi
+echo -e "Logs:   ${BLUE}$COMPOSE_CMD logs -f antigravity-remote${NC}"
 echo -e "============================================================"
 echo ""

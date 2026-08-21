@@ -7,8 +7,9 @@
 #
 #   ./scripts/export-credentials.sh >> .env
 #
-# It exports every credential file it finds so whichever one the standalone
-# hub reads is present in the container.
+# It exports every credential file it finds. The remote-control daemon needs
+# jetski-standalone-oauth-token; the rest keep the CLI's other entry points
+# signed in too.
 set -u
 
 GEMINI="$HOME/.gemini"

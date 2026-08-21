@@ -1,38 +1,23 @@
 services:
   antigravity-remote:
-    build:
-      context: .
-      args:
-        # Linux tarball of the Antigravity 2.0 app (hub), from the
-        # "Antigravity 2.0" section of https://antigravity.google/download.
-        ANTIGRAVITY_HUB_URL: "${ANTIGRAVITY_HUB_URL:-}"
-        ANTIGRAVITY_HUB_SHA512: "${ANTIGRAVITY_HUB_SHA512:-}"
+    build: .
     container_name: antigravity-remote
     restart: unless-stopped
     env_file:
       - path: .env
         required: false
-    # Only needed for LAN/VPN access or if you run your own tunnel. With a
-    # CLOUDFLARE_TUNNEL_TOKEN the container reaches the edge outbound-only and
-    # you can drop this mapping entirely.
-    ports:
-      - "127.0.0.1:8765:8765"
     volumes:
       # Antigravity state: auth tokens, config, conversations.
       - gemini-home:/root/.gemini
+      # Antigravity CLI logs / state.
+      - antigravity-home:/root/.antigravity
       # Your repositories / working directories.
       - workspaces:/root/dev
-    # Each warm hub harness holds a few hundred MB; recycle instead of
-    # strangling the host. Raise if you open many workspaces at once.
+    # Warm agent harnesses hold a few hundred MB each; recycle instead of
+    # strangling the host. Raise if you run many agents at once.
     mem_limit: 2g
-    healthcheck:
-      test:
-        ["CMD", "bash", "-c", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8765'"]
-      interval: 30s
-      timeout: 5s
-      start_period: 45s
-      retries: 3
 
 volumes:
   gemini-home:
+  antigravity-home:
   workspaces:

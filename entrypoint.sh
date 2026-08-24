@@ -34,9 +34,10 @@ agy --bg-updater || true
 # --- Daemon arguments ---------------------------------------------------------
 # Without --remote-control-name the daemon keeps the instance name saved in
 # ~/.gemini/config/config.json (userSettings.cliRemoteControlHostname), or
-# generates one on first run.
+# generates one on first run. --hub-port pins the local hub web UI port
+# (random otherwise) so it can be published from the container.
 
-args=(--remote-control)
+args=(--remote-control --hub-port "${AGY_HUB_PORT:-4400}")
 if [ -n "${AGY_HOSTNAME:-}" ]; then
   args+=(--remote-control-name "$AGY_HOSTNAME")
 fi

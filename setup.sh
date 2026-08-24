@@ -48,38 +48,27 @@ else
     info "Cloning repository from $REPO_URL..."; git clone "$REPO_URL" "$REPO_NAME"; cd "$REPO_NAME"
 fi
 
-# 3. Environment & credential setup
+# 3. Environment setup
 if [[ ! -f ".env" ]]; then
     [[ -f ".env.example" ]] || fatal ".env.example not found! Repository may be corrupted."
     info "Creating .env from .env.example..."; cp .env.example .env
-fi
-
-HAS_CREDS=false
-if grep -qE '^(OAUTH_CREDS_JSON|JETSKI_STANDALONE_OAUTH_TOKEN_B64|AGY_OAUTH_TOKEN_B64)=[^[:space:]]+' .env 2>/dev/null; then
-    success "Antigravity credentials found in .env."
-    HAS_CREDS=true
-elif [[ -f "$HOME/.gemini/oauth_creds.json" || -f "$HOME/.gemini/jetski-standalone-oauth-token" || -f "$HOME/.gemini/antigravity-cli/antigravity-oauth-token" ]]; then
-    info "Found local Antigravity credentials — exporting to .env..."
-    bash ./scripts/export-credentials.sh >> .env && success "Credentials auto-exported into .env."
-    HAS_CREDS=true
 fi
 
 # 4. Build
 info "Building image with $COMPOSE_CMD..."
 $COMPOSE_CMD build
 
-# 5. First-time sign-in (only when no credentials were found)
-# A previous in-container sign-in may already live in the gemini-home volume.
-if [[ "$HAS_CREDS" == "false" ]]; then
-    if $COMPOSE_CMD run --rm --no-deps -T antigravity-remote \
-         test -s /root/.gemini/jetski-standalone-oauth-token >/dev/null 2>&1; then
-        success "Existing sign-in found in the container volume."
-        HAS_CREDS=true
-    elif [[ -t 0 ]]; then
-        info "No credentials found — starting one-time interactive sign-in..."
-        $COMPOSE_CMD run --rm antigravity-remote && HAS_CREDS=true || \
-            warn "Sign-in did not complete; you can retry later (see below)."
-    fi
+# 5. First-time sign-in
+# A previous in-container sign-in lives in the gemini-home volume.
+HAS_CREDS=false
+if $COMPOSE_CMD run --rm --no-deps -T antigravity-remote \
+     test -s /root/.gemini/jetski-standalone-oauth-token >/dev/null 2>&1; then
+    success "Existing sign-in found in the container volume."
+    HAS_CREDS=true
+elif [[ -t 0 ]]; then
+    info "Not signed in yet — starting one-time interactive sign-in..."
+    $COMPOSE_CMD run --rm antigravity-remote && HAS_CREDS=true || \
+        warn "Sign-in did not complete; you can retry later (see below)."
 fi
 
 # 6. Launch
@@ -100,8 +89,6 @@ else
   echo -e "  ${BLUE}$COMPOSE_CMD run --rm antigravity-remote${NC}"
   echo -e "then restart the daemon:"
   echo -e "  ${BLUE}$COMPOSE_CMD up -d --force-recreate${NC}"
-  echo -e "Alternatively, on a logged-in machine:"
-  echo -e "  ${BLUE}./scripts/export-credentials.sh >> .env && $COMPOSE_CMD up -d --force-recreate${NC}"
 fi
 echo -e "Logs:   ${BLUE}$COMPOSE_CMD logs -f antigravity-remote${NC}"
 echo -e "============================================================"

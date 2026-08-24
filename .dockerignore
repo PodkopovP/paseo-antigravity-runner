@@ -3,5 +3,4 @@
 .env.example
 README.md
 LICENSE
-scripts/
 docker-compose.yml

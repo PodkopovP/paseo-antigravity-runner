@@ -27,10 +27,10 @@ agents' workspaces.
 curl -fsSL https://raw.githubusercontent.com/PodkopovP/paseo-antigravity-runner/main/setup.sh | bash
 ```
 
-The script checks prerequisites, creates `.env`, auto-exports local
-Antigravity credentials if present, builds, signs you in if needed, and
-starts the container. Then open <https://antigravity.google.com> with the
-same Google Account — your instance appears in the list.
+The script checks prerequisites, creates `.env`, builds, walks you through
+the one-time sign-in if needed, and starts the container. Then open
+<https://antigravity.google.com> with the same Google Account — your
+instance appears in the list.
 
 ---
 
@@ -43,14 +43,10 @@ cp .env.example .env          # everything in it is optional
 docker compose build
 ```
 
-Then sign in **one** of two ways:
+Then do the one-time sign-in (prints a URL to open; paste the code back):
 
 ```bash
-# a) One-time interactive sign-in inside the container (prints a URL to open):
 docker compose run --rm antigravity-remote
-
-# b) Or export credentials from a machine already logged in to Antigravity:
-./scripts/export-credentials.sh >> .env
 ```
 
 And launch:
@@ -82,16 +78,13 @@ All optional, set in `.env`:
 
 | Variable | Purpose |
 | --- | --- |
-| `OAUTH_CREDS_JSON` | `~/.gemini/oauth_creds.json` contents |
-| `JETSKI_STANDALONE_OAUTH_TOKEN_B64` | base64 of `~/.gemini/jetski-standalone-oauth-token` — the token the remote-control daemon uses |
-| `AGY_OAUTH_TOKEN_B64` | base64 of `~/.gemini/antigravity-cli/antigravity-oauth-token` |
-| `GOOGLE_ACCOUNTS_JSON` | `~/.gemini/google_accounts.json` contents |
 | `AGY_HOSTNAME` | instance name shown in the dashboard (default: saved name, or auto-generated) |
 | `GIT_USER_NAME` / `GIT_USER_EMAIL` | git identity inside workspaces |
 | `GITHUB_TOKEN` | lets the agent push / open PRs |
 
-Credential values are only seeded into the container on **first** start;
-tokens the daemon refreshes afterwards take precedence.
+Sign-in is deliberately **not** configured via `.env`: the one-time
+interactive sign-in stores the auth token in the `gemini-home` volume, and
+the daemon refreshes it from then on.
 
 ---
 
@@ -101,9 +94,9 @@ tokens the daemon refreshes afterwards take precedence.
   (installed at build time from <https://antigravity.google/cli/install.sh>).
   It registers this machine with Google's Remote Control service over an
   outbound connection and executes agent tasks locally in `/root/dev`.
-- **`entrypoint.sh`** — seeds credentials, configures git/GitHub, applies any
-  pending CLI update (`agy --bg-updater`, like the official systemd unit),
-  handles the one-time interactive sign-in, then `exec`s the daemon.
+- **`entrypoint.sh`** — configures git/GitHub, applies any pending CLI
+  update (`agy --bg-updater`, like the official systemd unit), handles the
+  one-time interactive sign-in, then `exec`s the daemon.
 - **Access control** is Google's: the dashboard requires the same Google
   Account that signed in the daemon.
 

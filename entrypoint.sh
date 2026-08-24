@@ -15,37 +15,7 @@ set -u
 
 TOKEN_FILE=/root/.gemini/jetski-standalone-oauth-token
 
-mkdir -p /root/.gemini /root/.gemini/antigravity-cli
-
-# --- Seed credentials (optional) ---------------------------------------------
-# Exported from a logged-in machine with scripts/export-credentials.sh. Each
-# file is only seeded when missing, so tokens the daemon refreshes in the
-# volume are never clobbered by stale .env values on restart. The daemon
-# itself only needs $TOKEN_FILE; the others keep the CLI's other entry points
-# signed in too.
-
-if [ -n "${OAUTH_CREDS_JSON:-}" ] && [ ! -s /root/.gemini/oauth_creds.json ]; then
-  printf '%s' "$OAUTH_CREDS_JSON" > /root/.gemini/oauth_creds.json
-  echo "Seeded oauth_creds.json."
-fi
-
-if [ -n "${GOOGLE_ACCOUNTS_JSON:-}" ] && [ ! -s /root/.gemini/google_accounts.json ]; then
-  printf '%s' "$GOOGLE_ACCOUNTS_JSON" > /root/.gemini/google_accounts.json
-  echo "Seeded google_accounts.json."
-fi
-
-if [ -n "${JETSKI_STANDALONE_OAUTH_TOKEN_B64:-}" ] && [ ! -s "$TOKEN_FILE" ]; then
-  printf '%s' "$JETSKI_STANDALONE_OAUTH_TOKEN_B64" | base64 -d > "$TOKEN_FILE"
-  chmod 600 "$TOKEN_FILE"
-  echo "Seeded jetski-standalone-oauth-token."
-fi
-
-if [ -n "${AGY_OAUTH_TOKEN_B64:-}" ] && [ ! -s /root/.gemini/antigravity-cli/antigravity-oauth-token ]; then
-  printf '%s' "$AGY_OAUTH_TOKEN_B64" | base64 -d \
-    > /root/.gemini/antigravity-cli/antigravity-oauth-token
-  chmod 600 /root/.gemini/antigravity-cli/antigravity-oauth-token
-  echo "Seeded antigravity-cli oauth token."
-fi
+mkdir -p /root/.gemini
 
 # --- Git / GitHub -----------------------------------------------------------
 
@@ -101,9 +71,9 @@ if [ ! -s "$TOKEN_FILE" ]; then
     exit 1
   fi
   echo "WARNING: not signed in ($TOKEN_FILE missing)."
-  echo "Either sign in interactively:  docker compose run --rm antigravity-remote"
-  echo "or seed exported credentials:  ./scripts/export-credentials.sh >> .env"
-  echo "Starting anyway — watch these logs for a sign-in URL."
+  echo "Sign in interactively:  docker compose run --rm antigravity-remote"
+  echo "Starting anyway — watch these logs for a sign-in URL and paste-code prompt,"
+  echo "or open a shell in the container and run:  agy --remote-control --hub-port 4499"
 fi
 
 echo "Starting Antigravity remote-control daemon ..."

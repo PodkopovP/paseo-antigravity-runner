@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Antigravity Remote Control (self-hosted) — One-Line Installer & Updater
+# Antigravity & Claude Remote Control (self-hosted) — Setup & Updater
 # ==============================================================================
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/PodkopovP/paseo-antigravity-runner/main/setup.sh | bash
@@ -19,7 +19,7 @@ fatal()   { error "$1"; exit 1; }
 
 echo -e "${BOLD}"
 echo "============================================================"
-echo "  🛰  Antigravity Remote Control (self-hosted) — Setup"
+echo "  🛰  Antigravity + Claude Remote Control (self-hosted)"
 echo "============================================================"
 echo -e "${NC}"
 
@@ -55,41 +55,74 @@ if [[ ! -f ".env" ]]; then
 fi
 
 # 4. Build
-info "Building image with $COMPOSE_CMD..."
+info "Building images with $COMPOSE_CMD..."
 $COMPOSE_CMD build
 
 # 5. First-time sign-in
-# A previous in-container sign-in lives in the gemini-home volume.
+# 5a. Antigravity sign-in
 HAS_CREDS=false
 if $COMPOSE_CMD run --rm --no-deps -T antigravity-remote \
      test -s /root/.gemini/jetski-standalone-oauth-token >/dev/null 2>&1; then
-    success "Existing sign-in found in the container volume."
+    success "Existing Antigravity sign-in found in container volume."
     HAS_CREDS=true
 elif [[ -t 0 ]]; then
-    info "Not signed in yet — starting one-time interactive sign-in..."
+    info "Not signed into Antigravity yet — starting one-time interactive sign-in..."
     $COMPOSE_CMD run --rm antigravity-remote && HAS_CREDS=true || \
-        warn "Sign-in did not complete; you can retry later (see below)."
+        warn "Antigravity sign-in did not complete; you can retry later (see below)."
+fi
+
+# 5b. Claude sign-in
+HAS_CLAUDE_CREDS=false
+if $COMPOSE_CMD run --rm --no-deps -T claude-remote \
+     bash -c '[ -s /root/.claude/.credentials.json ] || [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || [ -n "${ANTHROPIC_API_KEY:-}" ] || claude auth status >/dev/null 2>&1' >/dev/null 2>&1; then
+    success "Existing Claude sign-in found in container volume / environment."
+    HAS_CLAUDE_CREDS=true
+elif [[ -t 0 ]]; then
+    read -r -p "Sign in to Claude Code now? [Y/n] " response || response="y"
+    case "$response" in
+      [nN][oO]|[nN])
+        info "Skipping Claude sign-in for now. You can sign in later."
+        ;;
+      *)
+        info "Starting one-time interactive Claude Code sign-in..."
+        $COMPOSE_CMD run --rm claude-remote && HAS_CLAUDE_CREDS=true || \
+            warn "Claude sign-in did not complete; you can retry later."
+        ;;
+    esac
 fi
 
 # 6. Launch
-info "Starting container with $COMPOSE_CMD..."
+info "Starting containers with $COMPOSE_CMD..."
 $COMPOSE_CMD up -d
 
 # 7. Next steps
 echo ""
 echo -e "${GREEN}${BOLD}============================================================${NC}"
-echo -e "${GREEN}${BOLD} 🎉 Antigravity Remote Control is up! ${NC}"
+echo -e "${GREEN}${BOLD} 🎉 Remote Control is up! (Antigravity + Claude) ${NC}"
 echo -e "${GREEN}${BOLD}============================================================${NC}"
 echo ""
+echo -e "${BOLD}1. Google Antigravity:${NC}"
 if [[ "$HAS_CREDS" == "true" ]]; then
-  echo -e "Open ${BLUE}https://antigravity.google.com${NC} with the same Google"
-  echo -e "Account to see this instance and drive it from any browser."
+  echo -e "   Open ${BLUE}https://antigravity.google.com${NC} to drive Antigravity."
 else
-  echo -e "${BOLD}Not signed in yet.${NC} Complete the one-time sign-in with:"
-  echo -e "  ${BLUE}$COMPOSE_CMD run --rm antigravity-remote${NC}"
-  echo -e "then restart the daemon:"
-  echo -e "  ${BLUE}$COMPOSE_CMD up -d --force-recreate${NC}"
+  echo -e "   ${YELLOW}Not signed in yet.${NC} Complete sign-in with:"
+  echo -e "     ${BLUE}$COMPOSE_CMD run --rm antigravity-remote${NC}"
+  echo -e "   then restart: ${BLUE}$COMPOSE_CMD restart antigravity-remote${NC}"
 fi
-echo -e "Logs:   ${BLUE}$COMPOSE_CMD logs -f antigravity-remote${NC}"
+echo ""
+echo -e "${BOLD}2. Claude Code:${NC}"
+if [[ "$HAS_CLAUDE_CREDS" == "true" ]]; then
+  echo -e "   Open ${BLUE}https://claude.ai/code${NC} or the Claude mobile app."
+else
+  echo -e "   ${YELLOW}Not signed in yet.${NC} Complete sign-in with:"
+  echo -e "     ${BLUE}$COMPOSE_CMD run --rm claude-remote${NC}"
+  echo -e "   then restart: ${BLUE}$COMPOSE_CMD restart claude-remote${NC}"
+fi
+echo ""
+echo -e "${BOLD}Shared Workspaces:${NC} Both agents share the ${BLUE}/root/dev${NC} volume."
+echo ""
+echo -e "Logs:"
+echo -e "  Antigravity: ${BLUE}$COMPOSE_CMD logs -f antigravity-remote${NC}"
+echo -e "  Claude:      ${BLUE}$COMPOSE_CMD logs -f claude-remote${NC}"
 echo -e "============================================================"
 echo ""

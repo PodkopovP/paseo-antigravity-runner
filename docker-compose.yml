@@ -3,6 +3,7 @@ services:
     build: .
     container_name: antigravity-remote
     restart: unless-stopped
+    command: ["antigravity"]
     env_file:
       - path: .env
         required: false
@@ -11,13 +12,32 @@ services:
       - gemini-home:/root/.gemini
       # Antigravity CLI logs / state.
       - antigravity-home:/root/.antigravity
-      # Your repositories / working directories.
+      # Shared repositories / working directories.
       - workspaces:/root/dev
     # Warm agent harnesses hold a few hundred MB each; recycle instead of
     # strangling the host. Raise if you run many agents at once.
     mem_limit: 2g
 
+  claude-remote:
+    build: .
+    container_name: claude-remote
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    working_dir: /root/dev
+    command: ["claude"]
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Claude state: credentials, settings, session history.
+      - claude-home:/root/.claude
+      # Shared repositories / working directories.
+      - workspaces:/root/dev
+    mem_limit: 2g
+
 volumes:
   gemini-home:
   antigravity-home:
+  claude-home:
   workspaces:

@@ -15,11 +15,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     git \
     gpg \
+    jq \
     procps \
+    python3 \
     tini \
+    zstd \
   && rm -rf /var/lib/apt/lists/*
 
-# GitHub CLI (for the agent's git workflows inside workspaces).
+# GitHub CLI (for the agents' git workflows inside workspaces).
 RUN mkdir -p -m 755 /etc/apt/keyrings \
   && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
   && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
@@ -35,13 +38,21 @@ RUN curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh 
   && rm -f /tmp/agy-install.sh \
   && test -x /usr/local/bin/agy
 
-# Same environment as the official daemon's systemd unit.
-ENV AGY_CLI_DISABLE_AUTO_UPDATE=false
+# Official Claude Code CLI (native build).
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+  && ln -sf /root/.local/bin/claude /usr/local/bin/claude \
+  && test -x /usr/local/bin/claude
+
+# Runtime environment
+ENV PATH="/root/.local/bin:${PATH}" \
+    AGY_CLI_DISABLE_AUTO_UPDATE=false \
+    CLAUDE_CONFIG_DIR=/root/.claude
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# tini as PID 1: reaps the sidecar/MCP children the daemon spawns and forwards
+# tini as PID 1: reaps the sidecar/MCP children the daemons spawn and forwards
 # signals so `docker stop` shuts the tree down cleanly.
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/entrypoint.sh"]
+CMD ["/entrypoint.sh", "antigravity"]
+

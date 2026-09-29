@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     procps \
     python3 \
     tini \
+    tmux \
     zstd \
   && rm -rf /var/lib/apt/lists/*
 
@@ -44,9 +45,12 @@ RUN curl -fsSL https://claude.ai/install.sh | bash \
   && test -x /usr/local/bin/claude
 
 # Runtime environment
-ENV PATH="/root/.local/bin:${PATH}" \
+ENV PATH="/root/.gemini/antigravity-cli/bin:/root/.gemini/node/bin:/root/.local/bin:${PATH}" \
     AGY_CLI_DISABLE_AUTO_UPDATE=false \
-    CLAUDE_CONFIG_DIR=/root/.claude
+    CLAUDE_CONFIG_DIR=/root/.claude \
+    IS_SANDBOX=1
+
+WORKDIR /workspace
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
@@ -54,5 +58,5 @@ RUN chmod +x /entrypoint.sh
 # tini as PID 1: reaps the sidecar/MCP children the daemons spawn and forwards
 # signals so `docker stop` shuts the tree down cleanly.
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/entrypoint.sh", "antigravity"]
+CMD ["/entrypoint.sh", "combo"]
 

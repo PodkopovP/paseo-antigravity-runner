@@ -1,39 +1,56 @@
 services:
+  # Primary unified service running both Antigravity + Claude Code concurrently in one container
+  agent-runner:
+    build: .
+    container_name: agent-runner
+    restart: unless-stopped
+    command: ["combo"]
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Antigravity state: auth tokens, config, MCP servers, conversations
+      - gemini-home:/root/.gemini
+      # Antigravity CLI state / logs
+      - antigravity-home:/root/.antigravity
+      # Claude state: credentials, settings, session history
+      - claude-home:/root/.claude
+      # Shared repository / workspace
+      - workspaces:/workspace
+    mem_limit: 4g
+
+  # Standalone Antigravity service (for dedicated sign-in or running Antigravity alone)
   antigravity-remote:
     build: .
     container_name: antigravity-remote
     restart: unless-stopped
     command: ["antigravity"]
+    profiles: ["standalone"]
     env_file:
       - path: .env
         required: false
     volumes:
-      # Antigravity state: auth tokens, config, conversations.
       - gemini-home:/root/.gemini
-      # Antigravity CLI logs / state.
       - antigravity-home:/root/.antigravity
-      # Shared repositories / working directories.
-      - workspaces:/root/dev
-    # Warm agent harnesses hold a few hundred MB each; recycle instead of
-    # strangling the host. Raise if you run many agents at once.
+      - workspaces:/workspace
     mem_limit: 2g
 
+  # Standalone Claude Code service (for dedicated sign-in or running Claude alone)
   claude-remote:
     build: .
     container_name: claude-remote
     restart: unless-stopped
     stdin_open: true
     tty: true
-    working_dir: /root/dev
+    working_dir: /workspace
     command: ["claude"]
+    profiles: ["standalone"]
     env_file:
       - path: .env
         required: false
     volumes:
-      # Claude state: credentials, settings, session history.
       - claude-home:/root/.claude
-      # Shared repositories / working directories.
-      - workspaces:/root/dev
+      - workspaces:/workspace
     mem_limit: 2g
 
 volumes:
